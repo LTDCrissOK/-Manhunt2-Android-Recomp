@@ -9,7 +9,7 @@ val ps2xBootElf = providers.gradleProperty("ps2xBootElf")
 android {
     namespace = "com.example.manhunt2android"
     compileSdk {
-        version = release(37)
+        version = release(36)
     }
     ndkVersion = "28.2.13676358"
 
