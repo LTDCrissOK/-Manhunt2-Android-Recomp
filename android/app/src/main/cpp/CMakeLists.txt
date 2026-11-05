@@ -39,7 +39,7 @@ endif()
 # it is a separate analysis export, not the C++ set used by this Android runner.
 get_filename_component(
     MANHUNT2_RECOMP_DIR
-    "${CMAKE_CURRENT_LIST_DIR}/../../../../../recomp/output"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../../recomp/output"
     ABSOLUTE
 )
 
