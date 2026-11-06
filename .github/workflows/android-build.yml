@@ -62,12 +62,12 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ inputs.aggressive_logs && 'true' || 'false' }}
+                    ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ startsWith(github.ref, 'refs/heads/fix/') && 'true' || 'false' }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Manhunt2-Android-ARM32-ARM64-${{ inputs.aggressive_logs && 'diagnostic' || 'debug' }}
+          name: Manhunt2-Android-ARM32-ARM64-${{ startsWith(github.ref, 'refs/heads/fix/') && 'diagnostic' || 'debug' }}
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
