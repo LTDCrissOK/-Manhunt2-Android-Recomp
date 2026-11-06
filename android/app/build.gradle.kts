@@ -5,6 +5,10 @@ plugins {
 val ps2xBootElf = providers.gradleProperty("ps2xBootElf")
     .orElse("/storage/emulated/0/Android/data/com.example.manhunt2android/files/SLES_548.19")
     .get()
+val ps2xAggressiveLogs = providers.gradleProperty("ps2xAggressiveLogs")
+    .orElse("false")
+    .get()
+    .toBoolean()
 
 android {
     namespace = "com.example.manhunt2android"
@@ -35,6 +39,7 @@ android {
                     "-DPS2X_ENABLE_DEBUG_UI=OFF",
                     "-DPS2X_ENABLE_FFMPEG=OFF",
                     "-DPS2X_ENABLE_SCCACHE=OFF",
+                    "-DPS2X_ENABLE_AGRESSIVE_LOGS=${if (ps2xAggressiveLogs) "ON" else "OFF"}",
                     "-DPS2X_ENABLE_RUNNER_UNITY_BUILD=ON",
                     "-DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=32",
                     "-DANDROID_CPP_FEATURES=rtti exceptions",
