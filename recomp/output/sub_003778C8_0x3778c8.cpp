@@ -61,7 +61,7 @@ void sub_003778C8_0x3778c8(uint8_t* rdram, R5900Context* ctx, PS2Runtime *runtim
     ctx->vu0_vf[12] = _mm_castsi128_ps(READ128(ADD32(GPR_U32(ctx, 5), 176)));
     // 0x3778fc: 0x4a00d839  vcallmsr    $vi27
     ctx->pc = 0x3778fcu;
-    {     uint16_t instr_index = ctx->vi[27] & 0x1FF;     uint32_t target_byte_addr = (uint32_t)instr_index << 3;     ctx->vu0_pc = target_byte_addr;     runtime->vu0StartMicroProgram(rdram, ctx, target_byte_addr); }
+    {     uint16_t instr_index = ctx->vu0_cmsar0 & 0x1FF;     uint32_t target_byte_addr = (uint32_t)instr_index << 3;     ctx->vu0_pc = target_byte_addr;     runtime->vu0StartMicroProgram(rdram, ctx, target_byte_addr); }
     // 0x377900: 0x3e00008  jr          $ra
     ctx->pc = 0x377900u;
     {
