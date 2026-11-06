@@ -199,11 +199,12 @@ public final class SetupActivity extends Activity {
             Files.move(temporaryFile.toPath(), destinationFile.toPath(),
                     StandardCopyOption.REPLACE_EXISTING);
 
+            final long completedBytes = copied;
             runOnUiThread(() -> {
                 selectButton.setEnabled(true);
                 playButton.setEnabled(destinationFile.isFile() && destinationFile.length() > 0L);
                 statusView.setText("ISO seleccionada: " + ISO_FILE_NAME +
-                        "\nTamaño: " + formatBytes(copied));
+                        "\nTamaño: " + formatBytes(completedBytes));
             });
         } catch (Exception exception) {
             if (temporaryFile.exists()) {
