@@ -26,7 +26,7 @@ set(PS2X_ENABLE_RUNNER_PCH ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     ps2recomp
     GIT_REPOSITORY https://github.com/LTDCrissOK/PS2Recomp.git
-    GIT_TAG 9c617d9ab952269ab762f759b1fab243590efba7
+    GIT_TAG bc33060ba641c9eee0256674d4b37fe9761cf912
     GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(ps2recomp)
