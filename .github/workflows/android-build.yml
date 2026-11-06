@@ -1,4 +1,5 @@
 name: Android native build
+# Debug branch builds the pinned GS/VFS and IOMAN diagnostic runtime.
 
 on:
   workflow_dispatch:
