@@ -13,7 +13,7 @@ Proyecto experimental de recompilación estática de **Manhunt 2 para PlayStatio
 
 ## Compilación Android
 
-El workflow de GitHub Actions está en `.github/workflows/android-build.yml`. Se ejecuta manualmente desde la pestaña **Actions** y genera un APK de prueba para ARM32 y ARM64. Al ejecutarlo manualmente, activar `aggressive_logs` crea un APK de diagnóstico con trazas detalladas del runtime (incluidas las subidas de frame); usarlo solo para una ejecución de prueba porque aumenta mucho el volumen de Logcat. Las compilaciones normales y las que disparan los `push` mantienen esas trazas desactivadas.
+El workflow de GitHub Actions está en `.github/workflows/android-build.yml`. Se ejecuta manualmente desde la pestaña **Actions** y genera un APK de prueba para ARM32 y ARM64. La aplicación guarda un informe persistente en `Android/data/com.example.manhunt2android/files/manhunt2_runtime.log`. Registra las etapas de arranque, validación de ISO, extracción/carga del ELF, excepciones y, cada 120 cuadros, el PC del EE, actividad de hilos y contadores DMA/GIF/GS/VIF. Al volver a la pantalla inicial aparece el botón **EXPORTAR INFORME DE EJECUCIÓN** para guardar una copia mediante el selector de Android. Al ejecutar manualmente el workflow, `aggressive_logs` sigue siendo una opción adicional de trazas muy detalladas; normalmente no hace falta activarla.
 
 También se puede compilar localmente con Android SDK, NDK 28.2.13676358, CMake 3.22.1 y JDK 25:
 
