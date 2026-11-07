@@ -1,6 +1,7 @@
 package com.example.manhunt2android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -24,6 +25,8 @@ import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.OutputStream;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
@@ -31,6 +34,7 @@ import java.util.Locale;
 public final class SetupActivity extends Activity {
     private static final int REQUEST_OPEN_ISO = 1001;
     private static final int REQUEST_EXPORT_LOG = 1002;
+    private static final int REQUEST_GAME = 1003;
     private static final String ISO_FILE_NAME = "Manhunt2.iso";
 
     private TextView statusView;
@@ -175,6 +179,10 @@ public final class SetupActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_GAME) {
+            showLastRuntimeReport();
+            return;
+        }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) {
             return;
         }
@@ -298,8 +306,148 @@ public final class SetupActivity extends Activity {
             return;
         }
 
+        // Read-only preflight: keep the existing copy, mount, ELF extraction and
+        // NativeActivity boot path unchanged, but reject a wrong/truncated disc
+        // before Android opens a black NativeActivity window.
+        String validationError = validateManhuntIso(isoFile);
+        if (validationError != null) {
+            statusView.setText("ISO no válida: " + validationError);
+            new AlertDialog.Builder(this)
+                    .setTitle("No se puede iniciar Manhunt 2")
+                    .setMessage(validationError)
+                    .setPositiveButton("Aceptar", null)
+                    .show();
+            return;
+        }
+
+        statusView.setText("ISO verificada. Iniciando Manhunt 2...");
         Intent intent = new Intent(this, android.app.NativeActivity.class);
-        startActivity(intent);
+        startActivityForResult(intent, REQUEST_GAME);
+    }
+
+    /**
+     * Validates the ISO9660 primary volume descriptor and the exact boot ELF
+     * expected by this build. It does not mount the image or alter its contents.
+     */
+    private String validateManhuntIso(File image) {
+        final long sectorSize = 2048L;
+        final long descriptorOffset = 16L * sectorSize;
+        try (RandomAccessFile input = new RandomAccessFile(image, "r")) {
+            if (input.length() < descriptorOffset + sectorSize) {
+                return "El archivo es demasiado pequeño para contener un volumen ISO9660.";
+            }
+
+            input.seek(descriptorOffset);
+            int descriptorType = input.readUnsignedByte();
+            byte[] identifier = new byte[5];
+            input.readFully(identifier);
+            int descriptorVersion = input.readUnsignedByte();
+            if (descriptorType != 1
+                    || !new String(identifier, StandardCharsets.US_ASCII).equals("CD001")
+                    || descriptorVersion != 1) {
+                return "No se encontró el descriptor ISO9660 válido (CD001) en el sector 16.";
+            }
+
+            // The root directory record is at byte 156 of the primary descriptor.
+            input.seek(descriptorOffset + 156L);
+            int rootRecordLength = input.readUnsignedByte();
+            if (rootRecordLength < 34) {
+                return "El descriptor ISO9660 no contiene un directorio raíz válido.";
+            }
+            input.skipBytes(1); // extended attribute record length
+            long rootExtent = readUInt32LE(input);
+            long rootLength = readUInt32LE(input);
+            if (rootExtent <= 0L || rootLength <= 0L) {
+                return "El directorio raíz de la ISO está vacío o dañado.";
+            }
+
+            long rootOffset = rootExtent * sectorSize;
+            long scanLength = Math.min(rootLength, 8L * 1024L * 1024L);
+            if (rootOffset < 0L || rootOffset + scanLength > input.length()) {
+                return "El directorio raíz apunta fuera del tamaño real de la ISO.";
+            }
+
+            long position = 0L;
+            while (position < scanLength) {
+                input.seek(rootOffset + position);
+                int recordLength = input.readUnsignedByte();
+                if (recordLength == 0) {
+                    position = ((position / sectorSize) + 1L) * sectorSize;
+                    continue;
+                }
+                if (recordLength < 34 || position + recordLength > scanLength) {
+                    return "Se encontró una entrada ISO9660 dañada en el directorio raíz.";
+                }
+
+                input.skipBytes(1); // extended attribute record length
+                long fileExtent = readUInt32LE(input);
+                long fileLength = readUInt32LE(input);
+                input.seek(rootOffset + position + 32L);
+                int nameLength = input.readUnsignedByte();
+                if (nameLength > 0 && 33L + nameLength <= recordLength) {
+                    byte[] nameBytes = new byte[nameLength];
+                    input.readFully(nameBytes);
+                    String name = new String(nameBytes, StandardCharsets.US_ASCII)
+                            .toUpperCase(Locale.US);
+                    if (name.equals("SLES_548.19;1") || name.equals("SLES_548.19")) {
+                        long elfOffset = fileExtent * sectorSize;
+                        if (fileLength < 52L || elfOffset < 0L
+                                || elfOffset + fileLength > input.length()) {
+                            return "Se encontró SLES_548.19, pero sus datos están incompletos.";
+                        }
+                        return null;
+                    }
+                }
+                position += recordLength;
+            }
+            return "La ISO no contiene SLES_548.19;1 en el directorio raíz. Seleccioná la versión PAL española correcta.";
+        } catch (Exception exception) {
+            return "No se pudo leer la estructura ISO9660: " + exception.getMessage();
+        }
+    }
+
+    private static long readUInt32LE(RandomAccessFile input) throws java.io.IOException {
+        long b0 = input.readUnsignedByte();
+        long b1 = input.readUnsignedByte();
+        long b2 = input.readUnsignedByte();
+        long b3 = input.readUnsignedByte();
+        return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+    }
+
+    private void showLastRuntimeReport() {
+        File report = getDiagnosticLogFile();
+        if (!report.isFile()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Informe de ejecución")
+                    .setMessage("No se generó el informe. El arranque no llegó a crear el registro nativo.")
+                    .setPositiveButton("Aceptar", null)
+                    .show();
+            return;
+        }
+
+        try (java.io.RandomAccessFile input = new java.io.RandomAccessFile(report, "r")) {
+            long length = input.length();
+            long start = Math.max(0L, length - 12L * 1024L);
+            input.seek(start);
+            byte[] bytes = new byte[(int) (length - start)];
+            input.readFully(bytes);
+            String contents = new String(bytes, StandardCharsets.UTF_8);
+            String[] lines = contents.split("\\R");
+            int first = Math.max(0, lines.length - 35);
+            StringBuilder tail = new StringBuilder();
+            for (int i = first; i < lines.length; i++) {
+                tail.append(lines[i]).append('\n');
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Último informe de Manhunt 2")
+                    .setMessage(tail.toString().trim())
+                    .setPositiveButton("Aceptar", null)
+                    .setNeutralButton("Exportar informe", (dialog, which) -> requestExportDiagnosticLog())
+                    .show();
+        } catch (Exception exception) {
+            Toast.makeText(this, "No se pudo leer el informe: " + exception.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private File getIsoFile() {
