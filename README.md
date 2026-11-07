@@ -13,7 +13,7 @@ Proyecto experimental de recompilación estática de **Manhunt 2 para PlayStatio
 
 ## Compilación Android
 
-El workflow privado de GitHub Actions está en `.github/workflows/android-build.yml`. Se ejecuta manualmente desde la pestaña **Actions** y genera un APK de prueba para ARM32 y ARM64.
+El workflow de GitHub Actions está en `.github/workflows/android-build.yml`. Se ejecuta manualmente desde **Actions** o automáticamente al actualizar `android/`, `recomp/output/`, este README o el propio workflow. Genera un APK de prueba para ARM32 y ARM64.
 
 También se puede compilar localmente con Android SDK, NDK 28.2.13676358, CMake 3.22.1 y JDK 25:
 
