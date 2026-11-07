@@ -2,56 +2,75 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+val ps2xBootElf = providers.gradleProperty("ps2xBootElf")
+    .orElse("/storage/emulated/0/Android/data/com.example.manhunt2android/files/SLES_548.19")
+    .get()
+val ps2xAggressiveLogs = providers.gradleProperty("ps2xAggressiveLogs")
+    .orElse("false")
+    .get()
+    .toBoolean()
+
 android {
     namespace = "com.example.manhunt2android"
     compileSdk {
-        version = release(37)
+        version = release(36)
     }
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.example.manhunt2android"
-        minSdk = 23
-        targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        minSdk = 28
+        targetSdk = 34
+        versionCode = 2
+        versionName = "0.1.1"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+        }
+
         externalNativeBuild {
             cmake {
-                cppFlags += "-std=c++17"
+                cppFlags += "-std=c++20"
+                arguments += listOf(
+                    "-DPS2X_BUILD_RECOMP=OFF",
+                    "-DPS2X_BUILD_ANALYZER=OFF",
+                    "-DPS2X_BUILD_TEST=OFF",
+                    "-DPS2X_BUILD_STUDIO=OFF",
+                    "-DPS2X_ENABLE_DEBUG_UI=OFF",
+                    "-DPS2X_ENABLE_FFMPEG=OFF",
+                    "-DPS2X_ENABLE_SCCACHE=OFF",
+                    "-DPS2X_ENABLE_AGRESSIVE_LOGS=${if (ps2xAggressiveLogs) "ON" else "OFF"}",
+                    "-DPS2X_ENABLE_RUNNER_UNITY_BUILD=ON",
+                    "-DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=32",
+                    "-DANDROID_CPP_FEATURES=rtti exceptions",
+                    "-DPS2X_DEFAULT_BOOT_ELF=${ps2xBootElf}"
+                )
+                targets += "ps2EntryRunner"
             }
         }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            isJniDebuggable = true
+        }
         release {
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
-            }
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
-    buildFeatures {
-        viewBinding = true
-    }
-}
-
-dependencies {
-    implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.material)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
 }
