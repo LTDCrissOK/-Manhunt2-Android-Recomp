@@ -21,6 +21,8 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.OutputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -28,11 +30,13 @@ import java.util.Locale;
 
 public final class SetupActivity extends Activity {
     private static final int REQUEST_OPEN_ISO = 1001;
+    private static final int REQUEST_EXPORT_LOG = 1002;
     private static final String ISO_FILE_NAME = "Manhunt2.iso";
 
     private TextView statusView;
     private Button selectButton;
     private Button playButton;
+    private Button exportLogButton;
     private File isoFile;
 
     @Override
@@ -96,7 +100,62 @@ public final class SetupActivity extends Activity {
         root.addView(playButton, playParams);
         playButton.setOnClickListener(view -> launchGame());
 
+        exportLogButton = new Button(this);
+        exportLogButton.setText("EXPORTAR INFORME DE EJECUCIÓN");
+        exportLogButton.setEnabled(false);
+        LinearLayout.LayoutParams exportParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        exportParams.topMargin = dp(12);
+        root.addView(exportLogButton, exportParams);
+        exportLogButton.setOnClickListener(view -> requestExportDiagnosticLog());
+
         setContentView(root);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (exportLogButton != null) {
+            exportLogButton.setEnabled(getDiagnosticLogFile().isFile());
+        }
+    }
+
+    private void requestExportDiagnosticLog() {
+        if (!getDiagnosticLogFile().isFile()) {
+            Toast.makeText(this, "Todavía no hay un informe de ejecución.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE, "manhunt2_runtime.log");
+        startActivityForResult(intent, REQUEST_EXPORT_LOG);
+    }
+
+    private File getDiagnosticLogFile() {
+        File directory = getExternalFilesDir(null);
+        return directory == null ? new File(getFilesDir(), "manhunt2_runtime.log")
+                : new File(directory, "manhunt2_runtime.log");
+    }
+
+    private void copyDiagnosticLogTo(Uri destination) {
+        File source = getDiagnosticLogFile();
+        try (InputStream input = new FileInputStream(source);
+             OutputStream output = getContentResolver().openOutputStream(destination)) {
+            if (output == null) {
+                throw new IllegalStateException("Android no pudo crear el archivo de destino.");
+            }
+            byte[] buffer = new byte[16 * 1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+            }
+            output.flush();
+            Toast.makeText(this, "Informe exportado correctamente.", Toast.LENGTH_LONG).show();
+        } catch (Exception exception) {
+            Toast.makeText(this, "No se pudo exportar el informe: " + exception.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void openIsoPicker() {
@@ -116,8 +175,14 @@ public final class SetupActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_OPEN_ISO || resultCode != RESULT_OK ||
-                data == null || data.getData() == null) {
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+        if (requestCode == REQUEST_EXPORT_LOG) {
+            copyDiagnosticLogTo(data.getData());
+            return;
+        }
+        if (requestCode != REQUEST_OPEN_ISO) {
             return;
         }
 
