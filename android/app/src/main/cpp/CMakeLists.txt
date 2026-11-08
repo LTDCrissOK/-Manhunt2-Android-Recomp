@@ -31,6 +31,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ps2recomp)
 
+# Android GLES 3.0 context support from the companion GSdx adaptation repository.
+FetchContent_Declare(
+    gsdx_android_gles30
+    GIT_REPOSITORY https://github.com/LTDCrissOK/GSdx-Android-GLES30.git
+    GIT_TAG 7fcafe5164c88f489108a276bb61192a06877efd
+    GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(gsdx_android_gles30)
+
+if(NOT TARGET gsdx_gles30)
+    message(FATAL_ERROR "GSdx Android GLES 3.0 context target was not created.")
+endif()
+
 if(NOT TARGET ps2EntryRunner)
     message(FATAL_ERROR "PS2Recomp did not provide the Android ps2EntryRunner target.")
 endif()
@@ -80,7 +93,15 @@ set_property(TARGET ps2EntryRunner PROPERTY SOURCES "${PS2X_RUNNER_SOURCES_FILTE
 target_sources(ps2EntryRunner PRIVATE
     ${MANHUNT2_RECOMP_SOURCES}
     "${MANHUNT2_FUNCTION_TABLE}"
+    "${CMAKE_CURRENT_LIST_DIR}/gs/GSDxGLES30Backend.cpp"
 )
+
+target_include_directories(ps2EntryRunner PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/gs"
+    "${ps2recomp_SOURCE_DIR}/ps2xRuntime/include"
+)
+
+target_link_libraries(ps2EntryRunner PRIVATE gsdx_gles30)
 
 target_include_directories(ps2EntryRunner PRIVATE
     "${MANHUNT2_RECOMP_DIR}"
