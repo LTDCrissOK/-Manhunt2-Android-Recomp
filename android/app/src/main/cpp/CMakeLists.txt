@@ -4,6 +4,13 @@ project(Manhunt2AndroidNative LANGUAGES C CXX)
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
+# Android graphics API: compile Raylib against OpenGL ES 3.0.
+# Keep this scoped to the Android build; do not alter app startup or game loading.
+if(ANDROID)
+    set(PLATFORM "Android" CACHE STRING "" FORCE)
+    set(OPENGL_VERSION "ES 3.0" CACHE STRING "Android OpenGL ES API level" FORCE)
+endif()
+
 # PS2Recomp's Android configuration builds the PS2 runtime and NativeActivity runner.
 # Pin the upstream revision so a future upstream change cannot silently break this build.
 set(PS2X_BUILD_RUNTIME ON CACHE BOOL "" FORCE)
@@ -30,6 +37,42 @@ FetchContent_Declare(
     GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(ps2recomp)
+
+if(ANDROID)
+    # Raylib 5.5's Android bootstrap requests an ES 2.0 EGL context by default.
+    # Request ES 3.0 explicitly so the renderer and the created context agree.
+    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/src/platforms/rcore_android.c")
+    if(NOT EXISTS "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
+        message(FATAL_ERROR "Raylib Android EGL source was not found: ${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
+    endif()
+
+    file(READ "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}" PS2X_RAYLIB_ANDROID_SOURCE)
+    set(PS2X_RAYLIB_CONTEXT_OLD [=[
+    const EGLint contextAttribs[] =
+    {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE
+    };
+]=])
+    set(PS2X_RAYLIB_CONTEXT_NEW [=[
+    const EGLint contextAttribs[] =
+    {
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE
+    };
+]=])
+    string(FIND "${PS2X_RAYLIB_ANDROID_SOURCE}" "${PS2X_RAYLIB_CONTEXT_OLD}" PS2X_RAYLIB_CONTEXT_POSITION)
+    if(PS2X_RAYLIB_CONTEXT_POSITION EQUAL -1)
+        message(FATAL_ERROR "Raylib EGL context block changed; refusing to build with an unverified OpenGL ES context.")
+    endif()
+    string(REPLACE "${PS2X_RAYLIB_CONTEXT_OLD}" "${PS2X_RAYLIB_CONTEXT_NEW}"
+        PS2X_RAYLIB_ANDROID_SOURCE "${PS2X_RAYLIB_ANDROID_SOURCE}")
+
+    # GLES 3.0 provides glDrawBuffers as a core function, not the EXT entry point.
+    string(REPLACE "glDrawBuffersEXT(count, buffers);" "glDrawBuffers(count, buffers);"
+        PS2X_RAYLIB_ANDROID_SOURCE "${PS2X_RAYLIB_ANDROID_SOURCE}")
+    file(WRITE "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}" "${PS2X_RAYLIB_ANDROID_SOURCE}")
+endif()
 
 if(NOT TARGET ps2EntryRunner)
     message(FATAL_ERROR "PS2Recomp did not provide the Android ps2EntryRunner target.")
