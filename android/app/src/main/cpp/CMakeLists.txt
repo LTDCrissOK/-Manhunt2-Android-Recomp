@@ -39,9 +39,13 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(ps2recomp)
 
 if(ANDROID)
-    # Raylib 5.5's Android bootstrap requests an ES 2.0 EGL context by default.
-    # Request ES 3.0 explicitly so the renderer and the created context agree.
-    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/platforms/rcore_android.c")
+    # Raylib 5.5 selects GLESv2 in its Android link list even when GRAPHICS is ES3.
+    # Add the NDK GLESv3 library so ES 3.0 core entry points resolve at link time.
+    find_library(PS2X_GLESV3_LIBRARY GLESv3 REQUIRED)
+    target_link_libraries(raylib PRIVATE "${PS2X_GLESV3_LIBRARY}")
+
+    # Raylib 5.5 Android EGL source lives under src/platforms.
+    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/src/platforms/rcore_android.c")
     if(NOT EXISTS "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
         message(FATAL_ERROR "Raylib Android EGL source was not found: ${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
     endif()
@@ -67,11 +71,22 @@ if(ANDROID)
     endif()
     string(REPLACE "${PS2X_RAYLIB_CONTEXT_OLD}" "${PS2X_RAYLIB_CONTEXT_NEW}"
         PS2X_RAYLIB_ANDROID_SOURCE "${PS2X_RAYLIB_ANDROID_SOURCE}")
-
-    # GLES 3.0 provides glDrawBuffers as a core function, not the EXT entry point.
-    string(REPLACE "glDrawBuffersEXT(count, buffers);" "glDrawBuffers(count, buffers);"
-        PS2X_RAYLIB_ANDROID_SOURCE "${PS2X_RAYLIB_ANDROID_SOURCE}")
     file(WRITE "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}" "${PS2X_RAYLIB_ANDROID_SOURCE}")
+
+    # rlgl.h uses the EXT name in its ES3 framebuffer path. GLES 3.0 exposes
+    # glDrawBuffers as a core function, so call that symbol instead.
+    set(PS2X_RAYLIB_RLGL_HEADER "${raylib_SOURCE_DIR}/src/rlgl.h")
+    if(NOT EXISTS "${PS2X_RAYLIB_RLGL_HEADER}")
+        message(FATAL_ERROR "Raylib rlgl.h was not found: ${PS2X_RAYLIB_RLGL_HEADER}")
+    endif()
+    file(READ "${PS2X_RAYLIB_RLGL_HEADER}" PS2X_RAYLIB_RLGL_SOURCE)
+    string(FIND "${PS2X_RAYLIB_RLGL_SOURCE}" "glDrawBuffersEXT(count, buffers);" PS2X_RAYLIB_DRAW_BUFFERS_POSITION)
+    if(PS2X_RAYLIB_DRAW_BUFFERS_POSITION EQUAL -1)
+        message(FATAL_ERROR "Raylib rlgl.h no longer contains the expected glDrawBuffersEXT call; refusing an unverified patch.")
+    endif()
+    string(REPLACE "glDrawBuffersEXT(count, buffers);" "glDrawBuffers(count, buffers);"
+        PS2X_RAYLIB_RLGL_SOURCE "${PS2X_RAYLIB_RLGL_SOURCE}")
+    file(WRITE "${PS2X_RAYLIB_RLGL_HEADER}" "${PS2X_RAYLIB_RLGL_SOURCE}")
 endif()
 
 if(NOT TARGET ps2EntryRunner)
