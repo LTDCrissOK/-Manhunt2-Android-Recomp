@@ -41,7 +41,7 @@ FetchContent_MakeAvailable(ps2recomp)
 if(ANDROID)
     # Raylib 5.5's Android bootstrap requests an ES 2.0 EGL context by default.
     # Request ES 3.0 explicitly so the renderer and the created context agree.
-    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/src/platforms/rcore_android.c")
+    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/platforms/rcore_android.c")
     if(NOT EXISTS "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
         message(FATAL_ERROR "Raylib Android EGL source was not found: ${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
     endif()
