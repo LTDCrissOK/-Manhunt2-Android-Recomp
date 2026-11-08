@@ -26,7 +26,7 @@ set(PS2X_ENABLE_RUNNER_PCH ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     ps2recomp
     GIT_REPOSITORY https://github.com/LTDCrissOK/PS2Recomp.git
-    GIT_TAG 483fc899b952b14f87713694f92f4bdf599f4572
+    GIT_TAG f9065a85cc44e1b2a5612ff449330c3f8c9eea59
     GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(ps2recomp)
@@ -44,9 +44,12 @@ if(NOT TARGET gsdx_gles30)
     message(FATAL_ERROR "GSdx Android GLES 3.0 context target was not created.")
 endif()
 
-if(NOT TARGET ps2EntryRunner)
-    message(FATAL_ERROR "PS2Recomp did not provide the Android ps2EntryRunner target.")
+if(NOT TARGET ps2EntryRunner OR NOT TARGET ps2_runtime)
+    message(FATAL_ERROR "PS2Recomp did not provide the Android runner and runtime targets.")
 endif()
+
+# Select the app-provided GSRasterBackend factory inside GS::init().
+target_compile_definitions(ps2_runtime PRIVATE PS2X_USE_ANDROID_GSDX_GLES30=1)
 
 # The recompiler output is checked into this repository. Do not add output_ghidra:
 # it is a separate analysis export, not the C++ set used by this Android runner.
