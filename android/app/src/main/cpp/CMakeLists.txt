@@ -42,10 +42,10 @@ if(ANDROID)
     # Raylib 5.5 selects GLESv2 in its Android link list even when GRAPHICS is ES3.
     # Add the NDK GLESv3 library so ES 3.0 core entry points resolve at link time.
     find_library(PS2X_GLESV3_LIBRARY GLESv3 REQUIRED)
-    target_link_libraries(raylib PRIVATE "${PS2X_GLESV3_LIBRARY}")
+    target_link_libraries(raylib "${PS2X_GLESV3_LIBRARY}")
 
     # Raylib 5.5 Android EGL source lives under src/platforms.
-    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/src/platforms/rcore_android.c")
+    set(PS2X_RAYLIB_ANDROID_EGL_SOURCE "${raylib_SOURCE_DIR}/platforms/rcore_android.c")
     if(NOT EXISTS "${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
         message(FATAL_ERROR "Raylib Android EGL source was not found: ${PS2X_RAYLIB_ANDROID_EGL_SOURCE}")
     endif()
@@ -75,7 +75,7 @@ if(ANDROID)
 
     # rlgl.h uses the EXT name in its ES3 framebuffer path. GLES 3.0 exposes
     # glDrawBuffers as a core function, so call that symbol instead.
-    set(PS2X_RAYLIB_RLGL_HEADER "${raylib_SOURCE_DIR}/src/rlgl.h")
+    set(PS2X_RAYLIB_RLGL_HEADER "${raylib_SOURCE_DIR}/rlgl.h")
     if(NOT EXISTS "${PS2X_RAYLIB_RLGL_HEADER}")
         message(FATAL_ERROR "Raylib rlgl.h was not found: ${PS2X_RAYLIB_RLGL_HEADER}")
     endif()
