@@ -78,3 +78,8 @@ void GSDxGLES30Backend::SnapshotVram(std::vector<uint8_t>& out) const {
 GSTransferSnapshot GSDxGLES30Backend::GetTransferSnapshot() const {
     return m_referenceBackend.GetTransferSnapshot();
 }
+
+
+std::unique_ptr<GSRasterBackend> CreateAndroidGSRasterBackend() {
+    return std::make_unique<GSDxGLES30Backend>();
+}
