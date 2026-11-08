@@ -121,6 +121,34 @@ public final class MainActivity extends Activity {
             float sx = getWidth() / 1280f, sy = getHeight() / 720f;
             canvas.save();
             canvas.scale(sx, sy);
+            // Recreated title-screen artwork layer; the final supplied background image
+            // can replace this drawable without changing menu interaction code.
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.rgb(28, 5, 8));
+            canvas.drawOval(new RectF(635, 120, 1260, 650), paint);
+            paint.setColor(Color.rgb(190, 112, 123));
+            canvas.drawOval(new RectF(675, 160, 1230, 615), paint);
+            paint.setColor(Color.rgb(18, 8, 13));
+            canvas.drawOval(new RectF(715, 255, 1190, 505), paint);
+            paint.setColor(Color.rgb(235, 192, 174));
+            canvas.drawOval(new RectF(735, 270, 1160, 490), paint);
+            paint.setColor(Color.rgb(72, 13, 30));
+            canvas.drawOval(new RectF(855, 255, 1055, 500), paint);
+            paint.setColor(Color.rgb(180, 34, 58));
+            canvas.drawCircle(955, 375, 92, paint);
+            paint.setColor(Color.rgb(10, 4, 10));
+            canvas.drawCircle(955, 375, 57, paint);
+            paint.setColor(Color.rgb(240, 205, 194));
+            canvas.drawCircle(978, 348, 18, paint);
+            paint.setTypeface(Typeface.create("serif", Typeface.BOLD));
+            paint.setTextSize(72f);
+            paint.setColor(Color.rgb(188, 25, 12));
+            paint.setShadowLayer(7f, 2f, 2f, Color.BLACK);
+            canvas.drawText("manhunt 2", 245, 164, paint);
+            paint.clearShadowLayer();
+            canvas.restore();
+            canvas.save();
+            canvas.scale(sx, sy);
             paint.setTypeface(Typeface.create("serif", Typeface.BOLD));
             paint.setTextSize(30f);
             paint.setShadowLayer(2f, 1f, 1f, Color.BLACK);
