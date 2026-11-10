@@ -5,7 +5,7 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 # PS2Recomp's Android configuration builds the PS2 runtime and NativeActivity runner.
-# Pin the upstream revision so a future upstream change cannot silently break this build.
+# Pin the maintained project fork and exact restored revision so the Android runner, IOP/CDVD code, and runtime APIs stay in sync.
 set(PS2X_BUILD_RUNTIME ON CACHE BOOL "" FORCE)
 set(PS2X_BUILD_RECOMP OFF CACHE BOOL "" FORCE)
 set(PS2X_BUILD_ANALYZER OFF CACHE BOOL "" FORCE)
@@ -25,8 +25,8 @@ set(PS2X_ENABLE_RUNNER_PCH ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     ps2recomp
-    GIT_REPOSITORY https://github.com/ran-j/PS2Recomp.git
-    GIT_TAG e5636981a1c9de368f6b71e819c3dc188dfedbf4
+    GIT_REPOSITORY https://github.com/LTDCrissOK/PS2Recomp.git
+    GIT_TAG 483fc899b952b14f87713694f92f4bdf599f4572
     GIT_PROGRESS TRUE
 )
 FetchContent_MakeAvailable(ps2recomp)
