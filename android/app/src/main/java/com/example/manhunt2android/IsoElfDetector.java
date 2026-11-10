@@ -77,7 +77,7 @@ final class IsoElfDetector {
 
             if (current.directory) throw new IOException("BOOT2 apunta a un directorio, no a un ELF.");
             if (current.size < 52) throw new IOException("El archivo BOOT2 es demasiado pequeño para ser un ELF.");
-            byte[] header = read(ch, current.extent * SECTOR, 64);
+            byte[] header = read(ch, current.extent * SECTOR, (int)Math.min(64, current.size));
             if (header[0] != 0x7f || header[1] != 'E' || header[2] != 'L' || header[3] != 'F')
                 throw new IOException("El archivo indicado por BOOT2 no tiene una cabecera ELF válida.");
 
