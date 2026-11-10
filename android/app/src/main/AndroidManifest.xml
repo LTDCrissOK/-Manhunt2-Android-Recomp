@@ -3,28 +3,34 @@
 
     <application
         android:allowBackup="false"
-        android:hasCode="false"
+        android:hasCode="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:isGame="true"
         android:supportsRtl="true">
 
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:screenOrientation="landscape"
-            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
-
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="ps2EntryRunner" />
+            android:theme="@android:style/Theme.Material.NoActionBar">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <activity
+            android:name="android.app.NativeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="ps2EntryRunner" />
+        </activity>
+    </application>
 </manifest>
