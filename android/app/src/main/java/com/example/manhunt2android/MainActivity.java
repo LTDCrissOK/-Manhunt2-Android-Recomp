@@ -23,6 +23,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+    static {
+        System.loadLibrary("ps2EntryRunner");
+    }
+
+    private static native String nativeAttachIso(int fd, long expectedSize);
+    private static native byte[] nativeReadIso(long offset, int length);
+    private static native void nativeDetachIso();
     private static final int REQUEST_ISO = 4102;
     private final int bg = Color.rgb(12, 13, 15);
     private final int panel = Color.rgb(25, 27, 30);
@@ -168,10 +175,25 @@ public class MainActivity extends Activity {
         detectorExecutor.execute(() -> {
             IsoElfDetector.Result result = null;
             String error = null;
+            nativeDetachIso();
             try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r")) {
                 if (pfd == null) throw new IOException("Android no pudo abrir el archivo seleccionado.");
+
+                // Duplicate the SAF descriptor in native code before the detector closes its stream.
+                String bridgeError = nativeAttachIso(pfd.getFd(), pfd.getStatSize());
+                if (bridgeError != null) throw new IOException(bridgeError);
+
                 result = IsoElfDetector.detect(pfd);
+
+                // Exercise true positional reads from native code, not only Java FileChannel reads.
+                byte[] pvd = nativeReadIso(16L * 2048L, 2048);
+                byte[] sectorZero = nativeReadIso(0L, 32);
+                byte[] sector17 = nativeReadIso(17L * 2048L, 2048);
+                if (!hasPrimaryVolumeDescriptor(pvd) || sectorZero == null || sector17 == null) {
+                    throw new IOException("El puente nativo no pudo validar las lecturas aleatorias de la ISO.");
+                }
             } catch (Exception e) {
+                nativeDetachIso();
                 error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             }
             final IsoElfDetector.Result detected = result;
@@ -182,7 +204,8 @@ public class MainActivity extends Activity {
                 if (detected != null) {
                     detectStatus.setText("✓  ELF MIPS DETECTADO\n" + detected.elfPath +
                             "\n" + detected.elfClass + " • " + detected.byteOrder +
-                            "\nTamaño: " + formatSize(detected.elfSize));
+                            "\nTamaño: " + formatSize(detected.elfSize) +
+                            "\nPUENTE ISO NATIVO OK • LSN 0, 16 Y 17");
                     detectStatus.setTextColor(Color.rgb(116, 205, 137));
                     Toast.makeText(this, "ELF detectado correctamente", Toast.LENGTH_SHORT).show();
                 } else {
@@ -191,6 +214,14 @@ public class MainActivity extends Activity {
                 }
             });
         });
+    }
+
+    private static boolean hasPrimaryVolumeDescriptor(byte[] sector) {
+        return sector != null && sector.length >= 7 &&
+                (sector[0] & 0xff) == 1 &&
+                sector[1] == 'C' && sector[2] == 'D' &&
+                sector[3] == '0' && sector[4] == '0' &&
+                sector[5] == '1' && (sector[6] & 0xff) == 1;
     }
 
     private String queryDisplayName(Uri uri) {
