@@ -35,6 +35,15 @@ if(NOT TARGET ps2EntryRunner)
     message(FATAL_ERROR "PS2Recomp did not provide the Android ps2EntryRunner target.")
 endif()
 
+# Android SAF-to-native ISO bridge. Keep this JNI translation unit out of the
+# runner unity batch so JNI symbols and platform headers remain isolated.
+set(MANHUNT2_ANDROID_ISO_BRIDGE "${CMAKE_CURRENT_LIST_DIR}/native-lib.cpp")
+target_sources(ps2EntryRunner PRIVATE "${MANHUNT2_ANDROID_ISO_BRIDGE}")
+set_source_files_properties("${MANHUNT2_ANDROID_ISO_BRIDGE}" PROPERTIES
+    SKIP_UNITY_BUILD_INCLUSION ON
+)
+target_compile_definitions(ps2EntryRunner PRIVATE _FILE_OFFSET_BITS=64)
+
 # The recompiler output is checked into this repository. Do not add output_ghidra:
 # it is a separate analysis export, not the C++ set used by this Android runner.
 get_filename_component(
