@@ -326,7 +326,7 @@ public final class SetupActivity extends Activity {
 
     private void writeLogToUri(Uri uri) {
         String report = buildLogReport();
-        try (OutputStream output = getContentResolver().openOutputStream(uri, "wt")) {
+        try (OutputStream output = getContentResolver().openOutputStream(uri, "w")) {
             if (output == null) {
                 throw new IllegalStateException("Android no pudo abrir el destino elegido.");
             }
