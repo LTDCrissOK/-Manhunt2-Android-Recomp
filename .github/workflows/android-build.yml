@@ -62,7 +62,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ startsWith(github.ref, 'refs/heads/fix/') && 'true' || 'false' }}
+          ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ inputs.aggressive_logs || false }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
