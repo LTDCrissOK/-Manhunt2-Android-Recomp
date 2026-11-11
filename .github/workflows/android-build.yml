@@ -2,10 +2,17 @@ name: Android native build
 
 on:
   workflow_dispatch:
+    inputs:
+      aggressive_logs:
+        description: "Build an instrumented APK for one diagnostic run (verbose; use only when investigating a failure)"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
       - "feature/**"
+      - "fix/**"
     paths:
       - "android/**"
       - "recomp/output/**"
@@ -26,7 +33,7 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - name: Checkout private project
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Set up JDK 25
@@ -55,12 +62,12 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDebug --stacktrace
+          ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ startsWith(github.ref, 'refs/heads/fix/') && 'true' || 'false' }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Manhunt2-Android-ARM32-ARM64-debug
+          name: Manhunt2-Android-ARM32-ARM64-${{ startsWith(github.ref, 'refs/heads/fix/') && 'diagnostic' || 'debug' }}
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
