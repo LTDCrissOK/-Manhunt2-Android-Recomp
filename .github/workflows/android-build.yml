@@ -17,6 +17,9 @@ on:
       - "android/**"
       - "recomp/output/**"
       - ".github/workflows/android-build.yml"
+      - "tools/**"
+      - "tests/**"
+      - "docs/ANDROID_PINK_SCREEN_TRIAGE.md"
       - "README.md"
 
 permissions:
