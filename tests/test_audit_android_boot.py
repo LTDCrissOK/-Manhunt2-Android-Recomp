@@ -42,6 +42,45 @@ class BootAuditTests(unittest.TestCase):
     def test_missing_file(self):
         self.assertFalse(audit.inspect_elf(Path("/missing/nonexistent.elf"))["exists"])
 
+    def test_iso_handoff_source_evidence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            java = root / "android/app/src/main/java/com/example/manhunt2android/SetupActivity.java"
+            native = root / "android/app/src/main/cpp/native-lib.cpp"
+            cmake = root / "android/app/src/main/cpp/CMakeLists.txt"
+            java.parent.mkdir(parents=True)
+            native.parent.mkdir(parents=True)
+            java.write_text(
+                "copyIsoToAppStorage(uri); "
+                "Intent intent = new Intent(this, android.app.NativeActivity.class); "
+                "startActivity(intent);", encoding="utf-8")
+            native.write_text("JNIEXPORT void hello_world(void) {}", encoding="utf-8")
+            cmake.write_text("target_sources(ps2EntryRunner PRIVATE existing.cpp)", encoding="utf-8")
+            evidence = audit.inspect_android_iso_handoff(root)
+            self.assertTrue(evidence["java_copies_iso_to_app_storage"])
+            self.assertTrue(evidence["java_launches_native_activity"])
+            self.assertFalse(evidence["java_calls_elf_extractor"])
+            self.assertFalse(evidence["java_passes_iso_path_to_native"])
+            self.assertFalse(evidence["native_jni_iso_bridge_source"])
+            self.assertFalse(evidence["native_bridge_attached_to_runner"])
+
+    def test_iso_handoff_detects_explicit_bridge(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            java = root / "android/app/src/main/java/com/example/manhunt2android/SetupActivity.java"
+            native = root / "android/app/src/main/cpp/native-lib.cpp"
+            cmake = root / "android/app/src/main/cpp/CMakeLists.txt"
+            java.parent.mkdir(parents=True)
+            native.parent.mkdir(parents=True)
+            java.write_text("extractElfFromIso(); nativeSetIsoPath(path);", encoding="utf-8")
+            native.write_text("JNIEXPORT void nativeSetIsoPath(void) {}", encoding="utf-8")
+            cmake.write_text("target_sources(ps2EntryRunner PRIVATE native-lib.cpp)", encoding="utf-8")
+            evidence = audit.inspect_android_iso_handoff(root)
+            self.assertTrue(evidence["java_calls_elf_extractor"])
+            self.assertTrue(evidence["java_passes_iso_path_to_native"])
+            self.assertTrue(evidence["native_jni_iso_bridge_source"])
+            self.assertTrue(evidence["native_bridge_attached_to_runner"])
+
     def test_project_configuration(self):
         root = Path(__file__).resolve().parents[1]
         report = audit.audit_repo(root)
