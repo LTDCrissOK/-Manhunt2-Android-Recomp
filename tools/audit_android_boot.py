@@ -51,6 +51,32 @@ def inspect_elf(path: Path) -> dict[str, object]:
     return result
 
 
+
+def inspect_android_iso_handoff(repo: Path) -> dict[str, object]:
+    """Report static wiring evidence, not proof of runtime execution."""
+    java = repo / "android/app/src/main/java/com/example/manhunt2android/SetupActivity.java"
+    native = repo / "android/app/src/main/cpp/native-lib.cpp"
+    cmake = repo / "android/app/src/main/cpp/CMakeLists.txt"
+
+    java_text = java.read_text(encoding="utf-8") if java.exists() else ""
+    native_text = native.read_text(encoding="utf-8") if native.exists() else ""
+    cmake_text = cmake.read_text(encoding="utf-8") if cmake.exists() else ""
+
+    return {
+        "setup_activity_present": java.exists(),
+        "java_copies_iso_to_app_storage": "copyIsoToAppStorage(" in java_text,
+        "java_launches_native_activity": "startActivity(intent)" in java_text
+        and "android.app.NativeActivity.class" in java_text,
+        "java_calls_elf_extractor": bool(re.search(r"\\b(?:extractElf|extractBootElf|extractElfFromIso)\\s*\\(", java_text)),
+        "java_passes_iso_path_to_native": bool(re.search(r"\\b(?:nativeSetIsoPath|setNativeIsoPath|nativeSetBootPath)\\s*\\(", java_text)),
+        "native_jni_iso_bridge_source": bool(re.search(r"JNIEXPORT|RegisterNatives", native_text))
+        and bool(re.search(r"iso|bootPath|elf", native_text, re.I)),
+        "native_bridge_attached_to_runner": "native-lib.cpp" in cmake_text
+        and "target_sources(ps2EntryRunner" in cmake_text,
+        "note": "Source-only inspection; native libraries and other branches may implement additional behavior.",
+    }
+
+
 def audit_repo(repo: Path) -> dict[str, object]:
     gradle = repo / "android/app/build.gradle.kts"
     cmake = repo / "android/app/src/main/cpp/CMakeLists.txt"
@@ -77,6 +103,7 @@ def audit_repo(repo: Path) -> dict[str, object]:
         "default_boot_points_to_elf_not_iso": bool(boot_path and not boot_path.lower().endswith(".iso")),
         "runtime_revision_pinned": bool(output["runtime_revision"]),
     }
+    output["iso_handoff_evidence"] = inspect_android_iso_handoff(repo)
     output["notes"] = [
         "An ISO detected by the Java UI is not proof the native runner loaded a PS2 ELF.",
         "The reported APK version may differ from the version in this checked-out source tree.",
