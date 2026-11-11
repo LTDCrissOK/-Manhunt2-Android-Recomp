@@ -51,3 +51,21 @@ El ELF debe estar en esa ubicación y los demás archivos extraídos del disco d
 ## Nota de arquitectura
 
 Este proyecto usa recompilación estática del código EE junto con un runtime que proporciona servicios de PS2. No es un port nativo original del fabricante ni una emulación completa tradicional. La compatibilidad real depende de completar y validar las rutas de hardware que use el juego.
+
+## Créditos / Credits
+
+### Español
+
+- **[LTDCrissOK](https://github.com/LTDCrissOK)** — creador y responsable del proyecto Manhunt 2 Android Recomp; desarrollo e integración del port para Android.
+- **[Richard1222 / Saber](https://github.com/richard1222)** — colaborador en diagnósticos de arranque y documentación de Android; desarrolla por separado [Manhunt 2 Native PC](https://github.com/richard1222/Manhunt-2-Native-PC) para Windows.
+
+### English
+
+- **[LTDCrissOK](https://github.com/LTDCrissOK)** — creator and maintainer of Manhunt 2 Android Recomp; Android port development and integration.
+- **[Richard1222 / Saber](https://github.com/richard1222)** — contributor to Android startup diagnostics and documentation; separately develops [Manhunt 2 Native PC](https://github.com/richard1222/Manhunt-2-Native-PC) for Windows.
+
+**Proyectos independientes / Separate projects:** El objetivo de LTDCrissOK es el port para Android y el de Richard1222/Saber es el port nativo para PC. Podemos compartir investigación y mejoras compatibles sin confundir los dos proyectos. / LTDCrissOK focuses on the Android port and Richard1222/Saber on the native PC port. Compatible research and improvements may be shared while keeping the projects distinct.
+
+**Herramientas de terceros / Third-party tools:** [PS2Recomp](https://github.com/ran-j/PS2Recomp) es un proyecto de código abierto independiente utilizado como base del runtime. Se deben respetar sus licencias y atribuciones originales. / PS2Recomp is an independent open-source project used as the runtime foundation. Its original licenses and attributions must be preserved.
+
+**Nota / Note:** Este port es un proyecto independiente, no afiliado a Rockstar Games ni a Sony. No se incluyen archivos comerciales del juego. / This is an independent project, not affiliated with Rockstar Games or Sony. Commercial game files are not included.
