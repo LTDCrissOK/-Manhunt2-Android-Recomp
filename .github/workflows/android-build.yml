@@ -51,6 +51,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Run read-only boot audit tests
+        run: |
+          python3 -m unittest discover -s tests -p 'test_audit_android_boot.py'
+          python3 tools/audit_android_boot.py --repo .
+
       - name: Build debug APK for both ARM ABIs
         working-directory: android
         run: |
