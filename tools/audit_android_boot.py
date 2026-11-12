@@ -67,8 +67,8 @@ def inspect_android_iso_handoff(repo: Path) -> dict[str, object]:
         "java_copies_iso_to_app_storage": "copyIsoToAppStorage(" in java_text,
         "java_launches_native_activity": "startActivity(intent)" in java_text
         and "android.app.NativeActivity.class" in java_text,
-        "java_calls_elf_extractor": bool(re.search(r"\\b(?:extractElf|extractBootElf|extractElfFromIso)\\s*\\(", java_text)),
-        "java_passes_iso_path_to_native": bool(re.search(r"\\b(?:nativeSetIsoPath|setNativeIsoPath|nativeSetBootPath)\\s*\\(", java_text)),
+        "java_calls_elf_extractor": bool(re.search(r"\b(?:extractElf|extractBootElf|extractElfFromIso)\s*\(", java_text)),
+        "java_passes_iso_path_to_native": bool(re.search(r"\b(?:nativeSetIsoPath|setNativeIsoPath|nativeSetBootPath)\s*\(", java_text)),
         "native_jni_iso_bridge_source": bool(re.search(r"JNIEXPORT|RegisterNatives", native_text))
         and bool(re.search(r"iso|bootPath|elf", native_text, re.I)),
         "native_bridge_attached_to_runner": "native-lib.cpp" in cmake_text
