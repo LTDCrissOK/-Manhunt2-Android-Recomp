@@ -80,7 +80,13 @@ set_property(TARGET ps2EntryRunner PROPERTY SOURCES "${PS2X_RUNNER_SOURCES_FILTE
 target_sources(ps2EntryRunner PRIVATE
     ${MANHUNT2_RECOMP_SOURCES}
     "${MANHUNT2_FUNCTION_TABLE}"
+    "${CMAKE_CURRENT_LIST_DIR}/android_video_output.cpp"
 )
+
+# Android's native EGL and GLES libraries provide the presentation surface.
+if(ANDROID)
+    target_link_libraries(ps2EntryRunner PRIVATE EGL GLESv3 android log)
+endif()
 
 target_include_directories(ps2EntryRunner PRIVATE
     "${MANHUNT2_RECOMP_DIR}"
