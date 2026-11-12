@@ -40,6 +40,7 @@ android {
                     "-DPS2X_ENABLE_FFMPEG=OFF",
                     "-DPS2X_ENABLE_SCCACHE=OFF",
                     "-DPS2X_ENABLE_AGRESSIVE_LOGS=${if (ps2xAggressiveLogs) "ON" else "OFF"}",
+                    "-DPS2X_ANDROID_USE_GLES3=ON",
                     "-DPS2X_ENABLE_RUNNER_UNITY_BUILD=ON",
                     "-DPS2X_RUNNER_UNITY_BUILD_BATCH_SIZE=32",
                     "-DANDROID_CPP_FEATURES=rtti exceptions",
