@@ -87,3 +87,36 @@ con glslang del workflow, prueba de arranque del ELF propio en dispositivo Vulka
 compatible, pérdida/recuperación de superficie, readbacks y comparación visual.
 No había SDK/NDK ni dispositivo Android en el entorno de edición. El workflow está
 preparado para compilar el APK, pero su resultado no se ha verificado aquí.
+
+
+## Portabilidad de uploads ARM (corrección SSE2)
+
+El parche protege tanto `emmintrin.h` como toda la rutina CT32 SSE2 y su
+selección con `COREGS_UPLOAD_SSE2`, que solo se define si el compilador ofrece
+SSE2 y no se solicita `COREGS_UPLOAD_PORTABLE`. En ARM32/ARM64,
+`Dependencies.cmake` activa `COREGS_UPLOAD_PORTABLE=ON`; el parche de CMake
+transmite esa opción a `coregs_core` mediante una definición privada.
+
+La alternativa es el uploader C++ existente `HostToLocalPageAligned<32>` /
+`StoreRowSpan<32>` / `StoreRun<32>`: no se elimina la transferencia ni se dejan
+intrinsics sin implementar. Usa `memcpy` para leer/escribir píxeles, XOR/OR para
+detectar cambios y `MarkBlocks` para marcar los bloques modificados. Conserva
+filas impares, columnas parciales y el wrap de coordenadas/VRAM. No requiere
+sse2neon, NEON ni dependencias adicionales; la ruta SSE2 se mantiene en x86.
+El coste potencial es menor rendimiento de uploads CPU respecto a una futura
+versión NEON, no un cambio deliberado de formato o contenido de VRAM.
+
+Prueba reproducible (descarga la revisión fijada en un directorio temporal):
+
+```sh
+python3 tests/check_coregs_upload.py
+```
+
+Compila y ejecuta el fixture real de CoreGS (200 casos) en modo portable y,
+en hosts x86, SSE2. Ambos comparan contra la implementación genérica de memoria
+GS e incluyen comprobaciones de cambios y dirty blocks. El modo portable usa
+una cabecera `emmintrin.h` envenenada para detectar inclusiones x86 accidentales.
+El workflow ejecuta esta prueba antes de compilar el APK. Esto no sustituye la
+compilación cruzada NDK ni la prueba de rendimiento/renderizado en dispositivo.
+Tras cambiar el parche, regenerar la configuración nativa (`android/app/.cxx`)
+si se compila localmente con fuentes FetchContent ya descargadas.
