@@ -19,6 +19,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.widget.Toast;
 
@@ -42,6 +43,8 @@ public final class SetupActivity extends Activity {
     private static final String LOG_FILE_NAME = "manhunt2_log.txt";
 
     private TextView statusView;
+    private LinearLayout metadataCard;
+    private TextView metadataDetails;
     private Button selectButton;
     private Button playButton;
     private Button logButton;
@@ -64,7 +67,7 @@ public final class SetupActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(dp(28), dp(30), dp(28), dp(26));
+        root.setPadding(dp(22), dp(26), dp(22), dp(26));
         root.setBackgroundColor(Color.rgb(13, 13, 15));
 
         TextView title = new TextView(this);
@@ -104,6 +107,35 @@ public final class SetupActivity extends Activity {
         statusParams.topMargin = dp(16);
         root.addView(statusView, statusParams);
 
+        metadataCard = new LinearLayout(this);
+        metadataCard.setOrientation(LinearLayout.HORIZONTAL);
+        metadataCard.setGravity(Gravity.CENTER_VERTICAL);
+        metadataCard.setPadding(dp(12), dp(12), dp(12), dp(12));
+        metadataCard.setBackground(makePanelBackground());
+        metadataCard.setVisibility(ViewGroup.GONE);
+        LinearLayout.LayoutParams metadataParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        metadataParams.topMargin = dp(18);
+
+        TextView cover = new TextView(this);
+        cover.setText("MANHUNT\nII");
+        cover.setTextColor(Color.WHITE);
+        cover.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        cover.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        cover.setGravity(Gravity.CENTER);
+        cover.setBackground(makeCoverBackground());
+        LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(112), dp(154));
+        metadataCard.addView(cover, coverParams);
+
+        metadataDetails = new TextView(this);
+        metadataDetails.setTextColor(Color.rgb(232, 232, 232));
+        metadataDetails.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        metadataDetails.setPadding(dp(14), 0, 0, 0);
+        metadataDetails.setLineSpacing(dp(3), 1.0f);
+        metadataCard.addView(metadataDetails, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(metadataCard, metadataParams);
+
         playButton = new Button(this);
         playButton.setText("JUGAR");
         playButton.setEnabled(false);
@@ -131,7 +163,11 @@ public final class SetupActivity extends Activity {
         footerParams.topMargin = dp(15);
         root.addView(footer, footerParams);
 
-        setContentView(root);
+        ScrollView page = new ScrollView(this);
+        page.setFillViewport(true);
+        page.addView(root, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(page);
     }
 
     private void openIsoPicker() {
@@ -257,6 +293,7 @@ public final class SetupActivity extends Activity {
                 selectButton.setEnabled(true);
                 playButton.setEnabled(destinationFile.isFile() && destinationFile.length() > 0L);
                 statusView.setText(lastStatus);
+                inspectAndShowMetadata(destinationFile);
             });
         } catch (Exception exception) {
             if (temporaryFile.exists()) {
@@ -267,12 +304,56 @@ public final class SetupActivity extends Activity {
         }
     }
 
+
+    private GradientDrawable makePanelBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(Color.rgb(27, 27, 30));
+        drawable.setCornerRadius(dp(12));
+        drawable.setStroke(dp(1), Color.rgb(75, 35, 37));
+        return drawable;
+    }
+
+    private GradientDrawable makeCoverBackground() {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[] { Color.rgb(115, 12, 18), Color.rgb(24, 20, 22) });
+        drawable.setCornerRadius(dp(7));
+        drawable.setStroke(dp(1), Color.rgb(175, 45, 48));
+        return drawable;
+    }
+
+    private void inspectAndShowMetadata(File image) {
+        metadataCard.setVisibility(ViewGroup.VISIBLE);
+        metadataDetails.setText("LEYENDO DATOS DEL DISCO...\nPlayStation 2");
+        new Thread(() -> {
+            IsoMetadataReader.Metadata metadata = IsoMetadataReader.read(image);
+            runOnUiThread(() -> {
+                String id = metadata.gameId == null ? "No detectado" : metadata.gameId;
+                String region = metadata.region == null ? "No identificada" : metadata.region;
+                String boot = metadata.bootFile == null ? "No detectado" : metadata.bootFile;
+                String report = "MANHUNT 2\n"
+                        + "Consola: PlayStation 2\n"
+                        + "Desarrollador: Rockstar London\n"
+                        + "Lanzamiento: 2007\n"
+                        + "ID del disco: " + id + "\n"
+                        + "Región: " + region + "\n"
+                        + "Ejecutable: " + boot + "\n"
+                        + "ISO: " + formatBytes(image.length()) + "\n"
+                        + "Lectura interna: " + (metadata.validIso ? "ISO9660 detectada" : "No se pudo validar ISO9660");
+                metadataDetails.setText(report);
+                recordLog("METADATA", "Ficha ISO: ID=" + id + "; región=" + region
+                        + "; BOOT2=" + boot + "; ISO9660=" + metadata.validIso);
+            });
+        }, "Manhunt2-IsoMetadata").start();
+    }
+
     private void refreshIsoStatus() {
         boolean ready = isoFile != null && isoFile.isFile() && isoFile.length() > 0L;
         playButton.setEnabled(ready);
         if (ready) {
             lastStatus = "ISO encontrada: " + ISO_FILE_NAME + "\nTamaño: " + formatBytes(isoFile.length());
             statusView.setText(lastStatus);
+            inspectAndShowMetadata(isoFile);
             recordLog("ISO", "Se encontró una ISO previamente copiada. Tamaño: " + isoFile.length() + " bytes.");
         } else {
             lastStatus = "Todavía no seleccionaste una ISO.";
