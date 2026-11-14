@@ -25,10 +25,13 @@ import android.widget.Toast;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -483,11 +486,27 @@ public final class SetupActivity extends Activity {
         out.append("Controles: soporte de entrada en desarrollo; funcionamiento táctil y mando físico pendiente de prueba.\n");
         out.append("Captura de logs nativos EE/IOP/GS: los flags de diagnóstico pueden estar habilitados en compilación, pero aún no están volcados directamente en este informe Java.\n\n");
 
-        out.append("[5] ESTADO DE LA SESIÓN ANDROID\n");
+        out.append("[5] DIAGNÓSTICO NATIVO DEL MOTOR (DATOS REALES DISPONIBLES)\n");
+        File runtimeLog = findRuntimeLog();
+        if (runtimeLog != null) {
+            out.append("Archivo nativo: ").append(runtimeLog.getAbsolutePath()).append("\n");
+            out.append("Tamaño: ").append(runtimeLog.length()).append(" bytes\n");
+            out.append("Última modificación: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                    .format(new Date(runtimeLog.lastModified()))).append("\n");
+            out.append("Contenido reciente (máximo 96 KiB):\n");
+            out.append(readFileTail(runtimeLog, 96 * 1024)).append("\n");
+        } else {
+            out.append("manhunt2_runtime.log: NO ENCONTRADO en los directorios privados inspeccionados.\n");
+            out.append("Esto no demuestra por sí solo un fallo; puede indicar que el runner todavía no configuró la ruta del ELF o que el archivo está en otra ubicación.\n");
+        }
+        out.append("\n[6] LOGCAT DEL PROCESO ANDROID\n");
+        out.append(readOwnProcessLogcat()).append("\n");
+
+        out.append("[7] ESTADO DE LA SESIÓN ANDROID\n");
         out.append("Último estado: ").append(lastStatus).append("\n");
         out.append("Último error: ").append(lastError).append("\n\n");
 
-        out.append("[6] EVENTOS REGISTRADOS\n");
+        out.append("[8] EVENTOS REGISTRADOS\n");
         synchronized (logEvents) {
             if (logEvents.isEmpty()) {
                 out.append("No hay eventos adicionales.\n");
@@ -499,6 +518,83 @@ public final class SetupActivity extends Activity {
         out.append("\n============================================================\n");
         out.append("FIN DEL REGISTRO - Los estados no verificados se identifican expresamente.\n");
         return out.toString();
+    }
+
+    private File findRuntimeLog() {
+        File[] roots = new File[] { getFilesDir(), getExternalFilesDir(null), getCacheDir() };
+        for (File root : roots) {
+            File found = findRuntimeLogInDirectory(root, 5);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private File findRuntimeLogInDirectory(File directory, int depth) {
+        if (directory == null || depth < 0 || !directory.isDirectory()) return null;
+        File direct = new File(directory, "manhunt2_runtime.log");
+        if (direct.isFile()) return direct;
+        File[] children = directory.listFiles();
+        if (children == null) return null;
+        for (File child : children) {
+            if (child.isDirectory()) {
+                String name = child.getName();
+                if ("cache".equals(name) || "code_cache".equals(name) || "lib".equals(name)) continue;
+                File found = findRuntimeLogInDirectory(child, depth - 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private String readFileTail(File file, int maxBytes) {
+        try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
+            long length = input.length();
+            long start = Math.max(0L, length - maxBytes);
+            input.seek(start);
+            byte[] data = new byte[(int) (length - start)];
+            input.readFully(data);
+            String content = new String(data, java.nio.charset.StandardCharsets.UTF_8);
+            if (start > 0L) {
+                int firstNewline = content.indexOf('\n');
+                if (firstNewline >= 0) content = content.substring(firstNewline + 1);
+            }
+            return content.isEmpty() ? "(archivo vacío)" : content;
+        } catch (Exception exception) {
+            return "No se pudo leer el registro nativo: " + exception.getClass().getSimpleName()
+                    + ": " + exception.getMessage();
+        }
+    }
+
+    private String readOwnProcessLogcat() {
+        Process process = null;
+        try {
+            process = new ProcessBuilder("logcat", "-d", "-v", "threadtime",
+                    "--pid=" + android.os.Process.myPid(), "-t", "1200")
+                    .redirectErrorStream(true).start();
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                int lines = 0;
+                while ((line = reader.readLine()) != null && lines < 600
+                        && output.length() < 64 * 1024) {
+                    output.append(line).append('\n');
+                    lines++;
+                }
+            }
+            try {
+                process.waitFor();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            return output.length() == 0 ? "(logcat no devolvió líneas para el proceso)"
+                    : output.toString();
+        } catch (Exception exception) {
+            return "No se pudo consultar logcat: " + exception.getClass().getSimpleName()
+                    + ": " + exception.getMessage();
+        } finally {
+            if (process != null) process.destroy();
+        }
     }
 
     private void recordLog(String module, String description) {
