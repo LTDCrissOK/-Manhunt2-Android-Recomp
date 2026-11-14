@@ -1,5 +1,8 @@
 # CoreGS para Manhunt 2 / Android
 
+Base de aplicación: **0.1.1**, con su selector ISO y diagnósticos.
+Detalles y limitaciones: [integración 0.1.1](../../../../../../docs/coregs-0.1.1.md).
+
 Integración experimental. No equivale a confirmar que Manhunt 2 arranque o sea jugable.
 Los cambios del runtime se aplican a la copia descargada de PS2Recomp durante CMake;
 no modifican ni publican cambios en el repositorio remoto de PS2Recomp.
@@ -35,7 +38,7 @@ las conversiones de imágenes para ambas. No se incorpora ningún dato del juego
 `Dependencies.cmake` descarga CoreGS `7b9a763c0cddd98ed425ca9c1de51481745834ff`,
 Vulkan-Headers `b26454f3ccd67e704117a39295fa13935fd3804c` y raylib 5.5.
 El CMake padre descarga el fork LTDCrissOK/PS2Recomp
-`483fc899b952b14f87713694f92f4bdf599f4572`.
+`3f8c108f181a227147c0c5aecf11dbeb6a6de57c`.
 `ApplyPatch.cmake` comprueba/aplica los parches y permite repetir la configuración.
 Si se cambia un parche, borrar `android/app/.cxx` antes de recompilar para forzar
 una nueva descarga/configuración de FetchContent.
