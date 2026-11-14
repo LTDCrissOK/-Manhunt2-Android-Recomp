@@ -1,3 +1,12 @@
+> Historical reference: the GLES3 presenter described below belongs to
+> `feature/android-video-output-0.1.1` at `03f877a54fe60e72faa72fa4845cea7012933b00`.
+> This integration keeps its setup/ISO/logging flow and runtime revision, but
+> CoreGS Vulkan now owns window presentation. GLES3/raylib use an offscreen
+> pbuffer, so the GLES3 frame presenter/fallback below is not active.
+> Touch input polling remains active, but the raylib touch overlay is offscreen
+> and is **not visible** over Vulkan. Compositing an overlay remains pending.
+> See [0.1.1 integration](coregs-0.1.1.md).
+
 # Android GLES3 video output
 
 This implementation is based on the `0.1.1` application revision (the successful GitHub Actions run `42918605910`) and keeps the existing Android setup/boot path intact.

@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.31.6)
 project(Manhunt2AndroidNative LANGUAGES C CXX)
 
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+include(coregs/Dependencies.cmake)
 
 # PS2Recomp's Android configuration builds the PS2 runtime and NativeActivity runner.
 # Pin the upstream revision so a future upstream change cannot silently break this build.
@@ -17,8 +18,7 @@ set(PS2X_ENABLE_DEBUG_UI OFF CACHE BOOL "" FORCE)
 set(PS2X_ENABLE_FFMPEG OFF CACHE BOOL "" FORCE)
 set(PS2X_ENABLE_SCCACHE OFF CACHE BOOL "" FORCE)
 set(PS2X_ENABLE_RUNTIME_LOGS ON CACHE BOOL "" FORCE)
-# Gradle exposes this only as an opt-in diagnostic build property; keep normal APKs lean.
-set(PS2X_ENABLE_AGRESSIVE_LOGS "${PS2X_ENABLE_AGRESSIVE_LOGS}" CACHE BOOL "" FORCE)
+option(PS2X_ENABLE_AGRESSIVE_LOGS "Verbose diagnostic logs" OFF)
 set(PS2X_ENABLE_IOP_RPC_TRACE ON CACHE BOOL "" FORCE)
 set(PS2X_ENABLE_RUNNER_UNITY_BUILD ON CACHE BOOL "" FORCE)
 set(PS2X_RUNNER_UNITY_BUILD_BATCH_SIZE "32" CACHE STRING "" FORCE)
@@ -29,6 +29,9 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/LTDCrissOK/PS2Recomp.git
     GIT_TAG 3f8c108f181a227147c0c5aecf11dbeb6a6de57c
     GIT_PROGRESS TRUE
+    PATCH_COMMAND "${CMAKE_COMMAND}" "-DSOURCE=<SOURCE_DIR>"
+        "-DPATCH=${MANHUNT2_COREGS_DIR}/patches/ps2recomp-coregs.patch"
+        -P "${MANHUNT2_COREGS_DIR}/ApplyPatch.cmake"
 )
 FetchContent_MakeAvailable(ps2recomp)
 
@@ -93,3 +96,10 @@ set_source_files_properties("${MANHUNT2_FUNCTION_TABLE}" PROPERTIES
     SKIP_UNITY_BUILD_INCLUSION ON
     COMPILE_OPTIONS "-O0"
 )
+
+# CoreGS bridge is shared by the EE/GS and Android lifecycle callbacks.
+target_sources(ps2_runtime PRIVATE "${MANHUNT2_COREGS_DIR}/manhunt2_coregs.cpp")
+target_include_directories(ps2_runtime PRIVATE "${MANHUNT2_COREGS_DIR}")
+target_include_directories(raylib PRIVATE "${MANHUNT2_COREGS_DIR}")
+target_compile_definitions(ps2_runtime PRIVATE MANHUNT2_GS_SCALE=${MANHUNT2_GS_SCALE})
+target_link_libraries(ps2_runtime PUBLIC coregs)
