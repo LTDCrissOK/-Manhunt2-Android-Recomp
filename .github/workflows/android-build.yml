@@ -11,6 +11,7 @@ on:
       - "recomp/output/**"
       - ".github/workflows/android-build.yml"
       - "README.md"
+      - "tests/**"
 
 permissions:
   contents: read
@@ -29,6 +30,9 @@ jobs:
       - name: Checkout private project
         uses: actions/checkout@v4
 
+      - name: Test CoreGS bridge contract
+        run: python3 -m unittest discover -s tests -v
+
       - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
@@ -46,7 +50,10 @@ jobs:
           sdkmanager \
             "platforms;android-36" \
             "ndk;28.2.13676358" \
-            "cmake;3.22.1"
+            "cmake;3.31.6"
+
+      - name: Install host shader compiler
+        run: sudo apt-get update && sudo apt-get install -y glslang-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

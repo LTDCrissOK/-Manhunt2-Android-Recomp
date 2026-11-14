@@ -5,7 +5,7 @@ Proyecto experimental de recompilación estática de **Manhunt 2 para PlayStatio
 ## Versión objetivo
 
 - Juego: Manhunt 2, PS2, SLES-54819 (PAL, español).
-- Motor: [PS2Recomp](https://github.com/ran-j/PS2Recomp), fijado a una revisión concreta para que las compilaciones sean reproducibles.
+- Motor: [PS2Recomp](https://github.com/LTDCrissOK/PS2Recomp), fijado a una revisión concreta para que las compilaciones sean reproducibles.
 - Código del juego: C++ generado y guardado en `recomp/output/`.
 - Arquitecturas Android previstas: `armeabi-v7a` (ARM32) y `arm64-v8a` (ARM64).
 
@@ -15,7 +15,7 @@ Proyecto experimental de recompilación estática de **Manhunt 2 para PlayStatio
 
 El workflow privado de GitHub Actions está en `.github/workflows/android-build.yml`. Se ejecuta manualmente desde la pestaña **Actions** y genera un APK de prueba para ARM32 y ARM64.
 
-También se puede compilar localmente con Android SDK, NDK 28.2.13676358, CMake 3.22.1 y JDK 25:
+También se puede compilar localmente con Android SDK, NDK 28.2.13676358, CMake 3.31.6, `glslangValidator` en PATH y JDK 25:
 
 ```bash
 cd android
@@ -51,3 +51,25 @@ El ELF debe estar en esa ubicación y los demás archivos extraídos del disco d
 ## Nota de arquitectura
 
 Este proyecto usa recompilación estática del código EE junto con un runtime que proporciona servicios de PS2. No es un port nativo original del fabricante ni una emulación completa tradicional. La compatibilidad real depende de completar y validar las rutas de hardware que use el juego.
+
+
+## Renderizador CoreGS (Vulkan)
+
+Se incorporó una integración experimental de [CoreGS](https://github.com/moesuito/coregs)
+mediante FetchContent con revisiones fijadas y parches locales para Android:
+ventana `ANativeWindow`, tráfico GIF PATH1/2/3, registros GS, readbacks y
+`flush()`/`present()` por tick VSync observado. Raylib conserva entrada/reloj con
+EGL fuera de pantalla; CoreGS es quien presenta en la ventana.
+
+```bash
+cd android
+./gradlew :app:assembleDebug -PcoregsScale=1
+```
+
+`coregsScale` acepta 1..12; empezá con 1 en móviles. Hace falta una GPU/driver
+**Vulkan 1.2** con las características requeridas por CoreGS. Se conservan ambos
+ABI ARM, pero todavía hay que validar compilación NDK y ejecución real: no se ha
+confirmado que el juego sea jugable. El runtime CPU sigue activo como sombra,
+por lo que aún hay trabajo duplicado y stubs por revisar.
+
+[Detalles, dependencias, parches y estado de validación](android/app/src/main/cpp/coregs/README.md).

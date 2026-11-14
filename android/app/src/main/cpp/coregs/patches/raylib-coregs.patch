@@ -1,0 +1,82 @@
+diff --git a/src/platforms/rcore_android.c b/src/platforms/rcore_android.c
+index 85ce82a..5c00f75 100644
+--- a/src/platforms/rcore_android.c
++++ b/src/platforms/rcore_android.c
+@@ -1,3 +1,4 @@
++#include "manhunt2_coregs.h"
+ /**********************************************************************************************
+ *
+ *   rcore_android - Functions to manage window, graphics device and inputs
+@@ -420,8 +421,7 @@ void SetWindowFocused(void)
+ // Get native window handle
+ void *GetWindowHandle(void)
+ {
+-    TRACELOG(LOG_WARNING, "GetWindowHandle() not implemented on target platform");
+-    return NULL;
++    return platform.app->window;
+ }
+ 
+ // Get number of monitors
+@@ -548,7 +548,7 @@ void DisableCursor(void)
+ // Swap back buffer with front buffer (screen drawing)
+ void SwapScreenBuffer(void)
+ {
+-    eglSwapBuffers(platform.device, platform.surface);
++    // CoreGS owns presentation; raylib only renders offscreen for host utilities.
+ }
+ 
+ //----------------------------------------------------------------------------------
+@@ -792,6 +792,7 @@ int InitPlatform(void)
+ // Close platform
+ void ClosePlatform(void)
+ {
++    mh_gs_window(NULL);
+     // Close surface, context and display
+     if (platform.device != EGL_NO_DISPLAY)
+     {
+@@ -841,6 +842,7 @@ static int InitGraphicsDevice(void)
+     const EGLint framebufferAttribs[] =
+     {
+         EGL_RENDERABLE_TYPE, (rlGetVersion() == RL_OPENGL_ES_30)? EGL_OPENGL_ES3_BIT : EGL_OPENGL_ES2_BIT,      // Type of context support
++        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+         EGL_RED_SIZE, 8,            // RED color bit depth (alternative: 5)
+         EGL_GREEN_SIZE, 8,          // GREEN color bit depth (alternative: 6)
+         EGL_BLUE_SIZE, 8,           // BLUE color bit depth (alternative: 5)
+@@ -905,10 +907,10 @@ static int InitGraphicsDevice(void)
+     //  -> CORE.Window.screenScale
+     SetupFramebuffer(CORE.Window.display.width, CORE.Window.display.height);
+ 
+-    ANativeWindow_setBuffersGeometry(platform.app->window, CORE.Window.render.width, CORE.Window.render.height, displayFormat);
++    /* CoreGS selects swapchain buffer geometry. */
+     //ANativeWindow_setBuffersGeometry(platform.app->window, 0, 0, displayFormat);       // Force use of native display size
+ 
+-    platform.surface = eglCreateWindowSurface(platform.device, platform.config, platform.app->window, NULL);
++    platform.surface = eglCreatePbufferSurface(platform.device, platform.config, (const EGLint[]){ EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE });
+ 
+     // There must be at least one frame displayed before the buffers are swapped
+     //eglSwapInterval(platform.device, 1);
+@@ -966,13 +968,11 @@ static void AndroidCommandCallback(struct android_app *app, int32_t cmd)
+                     // Adding renderOffset here feels rather hackish, but the viewport scaling is wrong after the
+                     // context rebinding if the screen is scaled unless offsets are added. There's probably a more
+                     // appropriate way to fix this
+-                    ANativeWindow_setBuffersGeometry(app->window,
+-                        CORE.Window.render.width + CORE.Window.renderOffset.x,
+-                        CORE.Window.render.height + CORE.Window.renderOffset.y,
+-                        displayFormat);
++
++    /* CoreGS selects swapchain buffer geometry. */
+ 
+                     // Recreate display surface and re-attach OpenGL context
+-                    platform.surface = eglCreateWindowSurface(platform.device, platform.config, app->window, NULL);
++                    platform.surface = eglCreatePbufferSurface(platform.device, platform.config, (const EGLint[]){ EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE });
+                     eglMakeCurrent(platform.device, platform.surface, platform.surface, platform.context);
+ 
+                     platform.contextRebindRequired = false;
+@@ -1060,6 +1060,7 @@ static void AndroidCommandCallback(struct android_app *app, int32_t cmd)
+         } break;
+         case APP_CMD_TERM_WINDOW:
+         {
++            mh_gs_window(NULL); // Synchronous GPU drain before NativeActivity releases the window.
+             // Detach OpenGL context and destroy display surface
+             // NOTE 1: This case is used when the user exits the app without closing it. We detach the context to ensure everything is recoverable upon resuming.
+             // NOTE 2: Detaching context before destroying display surface avoids losing our resources (textures, shaders, VBOs...)

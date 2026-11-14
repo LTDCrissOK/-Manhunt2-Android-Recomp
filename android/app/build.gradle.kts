@@ -28,6 +28,7 @@ android {
             cmake {
                 cppFlags += "-std=c++20"
                 arguments += listOf(
+                    "-DMANHUNT2_GS_SCALE=${providers.gradleProperty("coregsScale").orElse("1").get()}",
                     "-DPS2X_BUILD_RECOMP=OFF",
                     "-DPS2X_BUILD_ANALYZER=OFF",
                     "-DPS2X_BUILD_TEST=OFF",
@@ -65,7 +66,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.31.6"
         }
     }
 }
