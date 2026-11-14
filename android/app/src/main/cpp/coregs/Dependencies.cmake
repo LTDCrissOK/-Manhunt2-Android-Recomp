@@ -15,6 +15,11 @@ FetchContent_Declare(vulkan_headers
     GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
     GIT_TAG b26454f3ccd67e704117a39295fa13935fd3804c)
 FetchContent_MakeAvailable(vulkan_headers)
+# ARM32/ARM64 use upstream's portable page-run uploader, not x86 intrinsics.
+# No sse2neon/NEON compiler flags or extra library are required by CoreGS.
+if(ANDROID_ABI MATCHES "^(armeabi-v7a|arm64-v8a)$")
+    set(COREGS_UPLOAD_PORTABLE ON CACHE BOOL "Portable CoreGS uploads on ARM" FORCE)
+endif()
 FetchContent_Declare(coregs
     GIT_REPOSITORY https://github.com/moesuito/coregs.git
     GIT_TAG 7b9a763c0cddd98ed425ca9c1de51481745834ff

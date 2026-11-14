@@ -1,5 +1,5 @@
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 118d496..59ee6ac 100644
+index 118d496..3632c0f 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -13,6 +13,9 @@ if(WIN32)
@@ -12,52 +12,119 @@ index 118d496..59ee6ac 100644
  else()
      find_package(Vulkan REQUIRED)
      set(COREGS_VULKAN_INCLUDE_DIR "${Vulkan_INCLUDE_DIRS}")
-@@ -112,7 +115,7 @@ endif()
- 
+@@ -61,6 +64,12 @@ set(COREGS_CORE_SOURCES
+     core2/core2_depth_alias.cpp)
+
+ add_library(coregs_core STATIC ${COREGS_CORE_SOURCES})
++# No SIMD compatibility dependency is needed on ARM: use the scalar page-run
++# uploader. This option also allows testing that exact path on x86 hosts.
++option(COREGS_UPLOAD_PORTABLE "Use portable C++ HOST->LOCAL uploads instead of SSE2" OFF)
++if(COREGS_UPLOAD_PORTABLE)
++    target_compile_definitions(coregs_core PRIVATE COREGS_UPLOAD_PORTABLE=1)
++endif()
+ target_include_directories(coregs_core
+     PUBLIC
+         "${PROJECT_SOURCE_DIR}/include"
+@@ -112,7 +121,7 @@ endif()
+
  # ---- coregs: the front end a host talks to ----------------------------------------------------
  set(COREGS_RENDERER_SOURCES hw_present_mode.cpp)
 -if(WIN32)
 +if(WIN32 OR ANDROID)
      list(APPEND COREGS_RENDERER_SOURCES hw_gs_backend.cpp)
  endif()
- 
+
 diff --git a/src/core2/core2_gpu.cpp b/src/core2/core2_gpu.cpp
 index 7c6e9df..3355ca8 100644
 --- a/src/core2/core2_gpu.cpp
 +++ b/src/core2/core2_gpu.cpp
 @@ -4549,7 +4549,7 @@ bool Gpu::Compose(const std::uint32_t words[28], ImageId sourceA, ImageId source
  }
- 
+
  std::uint64_t Gpu::DisplayImage() const {
 -  return reinterpret_cast<std::uint64_t>(impl_->display.image);
 +  return (std::uint64_t)(impl_->display.image);
  }
- 
+
  bool Gpu::Deinterlace(const gpu::GpuDrawer::DeinterlaceStep &step, std::string &error) {
 @@ -4659,7 +4659,7 @@ bool Gpu::Fxaa(std::uint32_t width, std::uint32_t height, std::string &error) {
    return true;
  }
- 
+
 -std::uint64_t Gpu::FxaaImage() const { return reinterpret_cast<std::uint64_t>(impl_->fxaa.image); }
 +std::uint64_t Gpu::FxaaImage() const { return (std::uint64_t)(impl_->fxaa.image); }
- 
+
  bool Gpu::PresentScale(bool fromFxaa, std::uint32_t width, std::uint32_t height, std::uint32_t outWidth,
                         std::uint32_t outHeight, float sharpness, std::string &error) {
 @@ -4738,7 +4738,7 @@ bool Gpu::PresentScale(bool fromFxaa, std::uint32_t width, std::uint32_t height,
    return true;
  }
- 
+
 -std::uint64_t Gpu::PresentImage() const { return reinterpret_cast<std::uint64_t>(impl_->presentOut.image); }
 +std::uint64_t Gpu::PresentImage() const { return (std::uint64_t)(impl_->presentOut.image); }
- 
+
  bool Gpu::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &pixels,
                        std::string &error, bool presentScaled, bool fxaa) {
+diff --git a/src/core2/core2_upload.cpp b/src/core2/core2_upload.cpp
+index 32e7c4d..aaa7812 100644
+--- a/src/core2/core2_upload.cpp
++++ b/src/core2/core2_upload.cpp
+@@ -5,7 +5,13 @@
+
+ #include "core2_upload.hpp"
+
++// SSE2 intrinsics are only available on x86. Other targets use the existing
++// page-run scalar implementation (including exact changed-block tracking).
++#if !defined(COREGS_UPLOAD_PORTABLE) && (defined(__SSE2__) || defined(_M_X64) || \
++    (defined(_M_IX86_FP) && _M_IX86_FP >= 2))
++#define COREGS_UPLOAD_SSE2 1
+ #include <emmintrin.h>
++#endif
+
+ #include <algorithm>
+ #include <bit>
+@@ -137,6 +143,7 @@ std::uint32_t StoreRowSpan(std::uint8_t *memoryBytes, const BufferView &view, st
+     return diff;
+ }
+
++#if defined(COREGS_UPLOAD_SSE2)
+ // IN-452: PSMCT32 columns are 8 x 2 pixels in 64 bytes, word w holding pixel (2 * (w / 4) + w % 2, (w / 2) % 2):
+ // row 0's pixels 0,1 then row 1's 0,1, then row 0's 2,3 and so on. Two host rows of 8 pixels (four 16-byte vectors
+ // A, B of row 0 and C, D of row 1) are therefore the column's four 16-byte quarters unpacklo/hi_epi64(A, C) and
+@@ -232,6 +239,8 @@ std::uint32_t HostToLocalCt32(std::uint8_t *memoryBytes, const BufferView &view,
+     return diff;
+ }
+
++#endif  // COREGS_UPLOAD_SSE2
++
+ template <std::uint32_t Bpp>
+ std::uint32_t HostToLocalPageAligned(std::uint8_t *memoryBytes, const BufferView &view, std::uint32_t x0,
+                                      std::uint32_t y0, std::uint32_t width, std::uint32_t height,
+@@ -314,6 +323,7 @@ bool FastHostToLocal(std::uint8_t *memoryBytes, const BufferView &view, std::uin
+     if (swizzle == UploadSwizzle::PageRuns && view.basePointer % memory::kBlocksPerPage == 0) {
+         const std::uint32_t *pageOffsets = InPageOffsetTables().perPsm[code].data();
+         std::uint32_t diff = 0;
++#if defined(COREGS_UPLOAD_SSE2)
+         // IN-452: PSMCT32 through whole columns (the game's race uploads are mostly CT32); COREGS_CORE2_CT32_COLUMNS=0 for A/B.
+         static const bool ct32Columns = std::getenv("COREGS_CORE2_CT32_COLUMNS") == nullptr ||
+                                         std::strcmp(std::getenv("COREGS_CORE2_CT32_COLUMNS"), "0") != 0;
+@@ -325,6 +335,10 @@ bool FastHostToLocal(std::uint8_t *memoryBytes, const BufferView &view, std::uin
+                 return true;
+             }
+         }
++#endif
++        // Portable path handles every CT32 pixel via StoreRun<32>: memcpy-based
++        // loads/stores, XOR/OR change detection and per-block dirty bits. It also
++        // handles odd rows, partial columns, unaligned input and coordinate wrap.
+         switch (bpp) {
+             case 32: diff = HostToLocalPageAligned<32>(memoryBytes, view, x0, y0, width, height, data, pageOffsets, pageWidth, pageHeight, changedBlocks); break;
+             case 24: diff = HostToLocalPageAligned<24>(memoryBytes, view, x0, y0, width, height, data, pageOffsets, pageWidth, pageHeight, changedBlocks); break;
 diff --git a/src/hw_gs_backend.cpp b/src/hw_gs_backend.cpp
 index ba5eb32..de15cdc 100644
 --- a/src/hw_gs_backend.cpp
 +++ b/src/hw_gs_backend.cpp
 @@ -270,7 +270,7 @@ struct Renderer::Impl {
- 
+
    // On the frametime thread: when the presentation `id` reached the display, in the log's milliseconds; 0 when it did not
    // within half a second.
 -  double wait_until_shown(VkSwapchainKHR on, std::uint64_t id, HANDLE timer) {
@@ -82,7 +149,7 @@ index ba5eb32..de15cdc 100644
 +#endif
      }
    }
- 
+
    void frametime_worker() {
      // A high-resolution timer for the half-millisecond polls (a plain Sleep rounds to the system tick).
 +#if defined(_WIN32)
@@ -180,7 +247,7 @@ index c2eb068..4b344e1 100644
  #endif
    if (!library) {
 @@ -93,6 +97,9 @@ void resolve_headless(VkInstance instance, std::vector<std::string> &missing) {
- 
+
  // Surface and presentation entry points: only the windowed path needs them.
  void resolve_surface(VkInstance instance, std::vector<std::string> &missing) {
 +#if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -202,7 +269,7 @@ index 44d470e..5202724 100644
 +#endif
  #define VK_NO_PROTOTYPES
  #include <vulkan/vulkan.h>
- 
+
 @@ -41,6 +44,7 @@
  #define vkCreateInstance coregs_hw_vkCreateInstance
  #define vkCreateSemaphore coregs_hw_vkCreateSemaphore
@@ -214,7 +281,7 @@ index 44d470e..5202724 100644
 @@ -69,6 +73,9 @@
  #define vkResetFences coregs_hw_vkResetFences
  #define vkWaitForFences coregs_hw_vkWaitForFences
- 
+
 +#if defined(VK_USE_PLATFORM_ANDROID_KHR)
 +inline PFN_vkCreateAndroidSurfaceKHR coregs_hw_vkCreateAndroidSurfaceKHR = nullptr;
 +#endif
@@ -228,19 +295,19 @@ index fadbd0c..a00b1cd 100644
 @@ -3796,7 +3796,7 @@ bool GpuDrawer::ApplyFxaa(std::uint32_t width, std::uint32_t height, std::string
    return true;
  }
- 
+
 -std::uint64_t GpuDrawer::FxaaImage() const { return reinterpret_cast<std::uint64_t>(impl_->fxaaImage.image); }
 +std::uint64_t GpuDrawer::FxaaImage() const { return (std::uint64_t)(impl_->fxaaImage.image); }
- 
+
  void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
    impl_->scale = std::clamp<std::uint32_t>(scale, 1u, kGpuMaxScale);
 @@ -3830,7 +3830,7 @@ void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
- 
+
  std::uint32_t GpuDrawer::Scale() const { return impl_->scale; }
- 
+
 -std::uint64_t GpuDrawer::DisplayImage() const { return reinterpret_cast<std::uint64_t>(impl_->display.image); }
 +std::uint64_t GpuDrawer::DisplayImage() const { return (std::uint64_t)(impl_->display.image); }
- 
+
  bool GpuDrawer::ReadImageDebug(std::uint32_t which, std::uint32_t slot, std::uint32_t width, std::uint32_t height,
                                 std::vector<std::uint32_t> &words, std::string &error) {
 @@ -3852,7 +3852,7 @@ bool GpuDrawer::ReadImageDebug(std::uint32_t which, std::uint32_t slot, std::uin
@@ -250,7 +317,7 @@ index fadbd0c..a00b1cd 100644
 -  return read_image(reinterpret_cast<std::uint64_t>(source), width, height, words, error);
 +  return read_image((std::uint64_t)(source), width, height, words, error);
  }
- 
+
  bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
 @@ -3867,13 +3867,13 @@ bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vect
      error = "display read outside the display image";
@@ -259,7 +326,7 @@ index fadbd0c..a00b1cd 100644
 -  return read_image(reinterpret_cast<std::uint64_t>(source), width, height, words, error);
 +  return read_image((std::uint64_t)(source), width, height, words, error);
  }
- 
+
  bool GpuDrawer::read_image(std::uint64_t image, std::uint32_t width, std::uint32_t height,
                            std::vector<std::uint32_t> &words, std::string &error) {
    Impl &s = *impl_;
