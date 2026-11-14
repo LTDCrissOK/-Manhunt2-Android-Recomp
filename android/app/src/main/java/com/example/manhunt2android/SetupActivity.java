@@ -45,6 +45,7 @@ public final class SetupActivity extends Activity {
     private TextView statusView;
     private LinearLayout metadataCard;
     private TextView metadataDetails;
+    private TextView metadataCover;
     private Button selectButton;
     private Button playButton;
     private Button logButton;
@@ -117,15 +118,15 @@ public final class SetupActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         metadataParams.topMargin = dp(18);
 
-        TextView cover = new TextView(this);
-        cover.setText("MANHUNT\nII");
-        cover.setTextColor(Color.WHITE);
-        cover.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        cover.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        cover.setGravity(Gravity.CENTER);
-        cover.setBackground(makeCoverBackground());
+        metadataCover = new TextView(this);
+        metadataCover.setText("MANHUNT\\nII");
+        metadataCover.setTextColor(Color.WHITE);
+        metadataCover.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        metadataCover.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        metadataCover.setGravity(Gravity.CENTER);
+        metadataCover.setBackground(makeCoverBackground());
         LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(112), dp(154));
-        metadataCard.addView(cover, coverParams);
+        metadataCard.addView(metadataCover, coverParams);
 
         metadataDetails = new TextView(this);
         metadataDetails.setTextColor(Color.rgb(232, 232, 232));
@@ -331,14 +332,17 @@ public final class SetupActivity extends Activity {
                 String id = metadata.gameId == null ? "No detectado" : metadata.gameId;
                 String region = metadata.region == null ? "No identificada" : metadata.region;
                 String boot = metadata.bootFile == null ? "No detectado" : metadata.bootFile;
-                String report = "MANHUNT 2\n"
-                        + "Consola: PlayStation 2\n"
-                        + "Desarrollador: Rockstar London\n"
-                        + "Lanzamiento: 2007\n"
-                        + "ID del disco: " + id + "\n"
-                        + "Región: " + region + "\n"
-                        + "Ejecutable: " + boot + "\n"
-                        + "ISO: " + formatBytes(image.length()) + "\n"
+                boolean isManhunt2 = "SLES-54819".equals(id);
+                String gameTitle = isManhunt2 ? "MANHUNT 2" : "DISCO PS2";
+                metadataCover.setText(isManhunt2 ? "MANHUNT\\nII" : "PS2\\nDISC");
+                String report = gameTitle + "\\n"
+                        + "Consola: " + (metadata.validIso ? "PlayStation 2" : "No identificada") + "\\n"
+                        + "Desarrollador: " + (isManhunt2 ? "Rockstar London" : "No identificado") + "\\n"
+                        + "Lanzamiento: " + (isManhunt2 ? "2007" : "No identificado") + "\\n"
+                        + "ID del disco: " + id + "\\n"
+                        + "Región: " + region + "\\n"
+                        + "Ejecutable: " + boot + "\\n"
+                        + "ISO: " + formatBytes(image.length()) + "\\n"
                         + "Lectura interna: " + (metadata.validIso ? "ISO9660 detectada" : "No se pudo validar ISO9660");
                 metadataDetails.setText(report);
                 recordLog("METADATA", "Ficha ISO: ID=" + id + "; región=" + region
