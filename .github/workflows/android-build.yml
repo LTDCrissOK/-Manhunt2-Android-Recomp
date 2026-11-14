@@ -2,6 +2,12 @@ name: Android native build
 
 on:
   workflow_dispatch:
+    inputs:
+      aggressive_logs:
+        description: "Enable verbose runtime diagnostics"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -32,6 +38,9 @@ jobs:
 
       - name: Test CoreGS bridge contract
         run: python3 -m unittest discover -s tests -v
+
+      - name: Check pinned 0.1.1 runtime and raylib patches
+        run: python3 tests/check_runtime_integration.py
 
       - name: Test real CoreGS portable and SSE2 uploads
         run: python3 tests/check_coregs_upload.py
@@ -65,7 +74,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :app:assembleDebug --stacktrace
+          ./gradlew --no-daemon :app:assembleDebug --stacktrace -Pps2xAggressiveLogs=${{ inputs.aggressive_logs && 'true' || 'false' }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

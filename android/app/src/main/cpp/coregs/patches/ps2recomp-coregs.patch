@@ -1,3 +1,27 @@
+diff --git a/ps2xRuntime/CMakeLists.txt b/ps2xRuntime/CMakeLists.txt
+index 7d1b9e5..bc49b01 100644
+--- a/ps2xRuntime/CMakeLists.txt
++++ b/ps2xRuntime/CMakeLists.txt
+@@ -97,7 +97,8 @@ else()
+         endif()
+         file(READ "${PS2X_RAYLIB_ANDROID_SOURCE}" PS2X_RAYLIB_ANDROID_CONTENT)
+         string(FIND "${PS2X_RAYLIB_ANDROID_CONTENT}" "EGL_CONTEXT_CLIENT_VERSION, 2," PS2X_RAYLIB_ES2_CONTEXT_POSITION)
+-        if(PS2X_RAYLIB_ES2_CONTEXT_POSITION EQUAL -1)
++        string(FIND "${PS2X_RAYLIB_ANDROID_CONTENT}" "EGL_CONTEXT_CLIENT_VERSION, 3," PS2X_RAYLIB_ES2_CONTEXT_POSITION_ALREADY_PATCHED)
++        if(PS2X_RAYLIB_ES2_CONTEXT_POSITION EQUAL -1 AND PS2X_RAYLIB_ES2_CONTEXT_POSITION_ALREADY_PATCHED EQUAL -1)
+             message(FATAL_ERROR "raylib Android EGL context version anchor changed; review the GLES3 patch before building.")
+         endif()
+         string(REPLACE "EGL_CONTEXT_CLIENT_VERSION, 2," "EGL_CONTEXT_CLIENT_VERSION, 3,"
+@@ -112,7 +113,8 @@ else()
+         endif()
+         file(READ "${PS2X_RAYLIB_RLGL_SOURCE}" PS2X_RAYLIB_RLGL_CONTENT)
+         string(FIND "${PS2X_RAYLIB_RLGL_CONTENT}" "glDrawBuffersEXT(count, buffers);" PS2X_RAYLIB_DRAW_BUFFERS_POSITION)
+-        if(PS2X_RAYLIB_DRAW_BUFFERS_POSITION EQUAL -1)
++        string(FIND "${PS2X_RAYLIB_RLGL_CONTENT}" "glDrawBuffers(count, buffers);" PS2X_RAYLIB_DRAW_BUFFERS_POSITION_ALREADY_PATCHED)
++        if(PS2X_RAYLIB_DRAW_BUFFERS_POSITION EQUAL -1 AND PS2X_RAYLIB_DRAW_BUFFERS_POSITION_ALREADY_PATCHED EQUAL -1)
+             message(FATAL_ERROR "raylib ES3 draw-buffers anchor changed; review the Android GLES3 patch.")
+         endif()
+         string(REPLACE "glDrawBuffersEXT(count, buffers);" "glDrawBuffers(count, buffers);"
 diff --git a/ps2xRuntime/src/lib/gs/gs_frontend.cpp b/ps2xRuntime/src/lib/gs/gs_frontend.cpp
 index 9281d5f..0fbed73 100644
 --- a/ps2xRuntime/src/lib/gs/gs_frontend.cpp
@@ -8,7 +32,7 @@ index 9281d5f..0fbed73 100644
  #include "runtime/gs/gs_cpu_backend.h"
  #include "ps2_log.h"
 @@ -124,6 +125,7 @@ void GS::init(uint8_t *vram, uint32_t vramSize, GSRegisters *privRegs)
- 
+
  void GS::reset()
  {
 +    mh_gs_reset();
@@ -25,7 +49,7 @@ index 9281d5f..0fbed73 100644
 +    if (count) mh_gs_read_fifo(dst, count);
 +    return count;
  }
- 
+
  void GS::setRasterBackend(std::unique_ptr<GSRasterBackend> backend)
 diff --git a/ps2xRuntime/src/lib/gs/ps2_gif_arbiter.cpp b/ps2xRuntime/src/lib/gs/ps2_gif_arbiter.cpp
 index c0507c7..ddd5337 100644
@@ -54,7 +78,7 @@ index 37b6a4d..b06fea7 100644
  #include "runtime/ps2_address.h"
  #include "runtime/gs/gs_frontend.h"
 @@ -865,6 +866,14 @@ __m128i PS2Memory::read128(uint32_t address)
- 
+
  void PS2Memory::write8(uint32_t address, uint8_t value)
  {
 +    if (isGsPrivReg(address)) {
@@ -67,9 +91,9 @@ index 37b6a4d..b06fea7 100644
 +
      const bool scratch = isScratchpad(address);
      uint32_t physAddr = translateAddress(address);
- 
+
 @@ -904,6 +913,14 @@ void PS2Memory::write8(uint32_t address, uint8_t value)
- 
+
  void PS2Memory::write16(uint32_t address, uint16_t value)
  {
 +    if (isGsPrivReg(address)) {
@@ -84,7 +108,7 @@ index 37b6a4d..b06fea7 100644
      {
          throw std::runtime_error("Unaligned 16-bit write at address: 0x" + std::to_string(address));
 @@ -946,6 +963,7 @@ void PS2Memory::write16(uint32_t address, uint16_t value)
- 
+
  void PS2Memory::write32(uint32_t address, uint32_t value)
  {
 +    if (isGsPrivReg(address)) mh_gs_write(address, value, 4);
@@ -92,7 +116,7 @@ index 37b6a4d..b06fea7 100644
      {
          throw std::runtime_error("Unaligned 32-bit write at address: 0x" + std::to_string(address));
 @@ -1006,6 +1024,7 @@ void PS2Memory::write32(uint32_t address, uint32_t value)
- 
+
  void PS2Memory::write64(uint32_t address, uint64_t value)
  {
 +    if (isGsPrivReg(address)) mh_gs_write(address, value, 8);
@@ -100,7 +124,7 @@ index 37b6a4d..b06fea7 100644
      {
          throw std::runtime_error("Unaligned 64-bit write at address: 0x" + std::to_string(address));
 @@ -1960,8 +1979,10 @@ void PS2Memory::submitGifPacket(GifPathId pathId, const uint8_t *data, uint32_t
- 
+
      if (m_gifArbiter)
          m_gifArbiter->submit(pathId, data, sizeBytes, path2DirectHl);
 -    else if (m_gifPacketCallback)
@@ -108,7 +132,7 @@ index 37b6a4d..b06fea7 100644
 +        mh_gs_gif(static_cast<int>(pathId), data, sizeBytes);
          m_gifPacketCallback(data, sizeBytes);
 +    }
- 
+
      if (m_gifArbiter && drainImmediately)
          m_gifArbiter->drain();
 @@ -1997,12 +2018,16 @@ void PS2Memory::processGIFPacket(const uint8_t *data, uint32_t sizeBytes)
@@ -121,7 +145,7 @@ index 37b6a4d..b06fea7 100644
          m_gifPacketCallback(data, sizeBytes);
 +    }
  }
- 
+
  bool PS2Memory::tryProcessNativeGifImageUploadChain(GS &gs, uint32_t tadr, uint32_t chcr)
  {
 +    return false; // CoreGS must receive the original DMA/GIF stream.
@@ -130,7 +154,7 @@ index 37b6a4d..b06fea7 100644
      static constexpr uint32_t D_STAT = 0x1000E010u;
      static constexpr uint32_t D_CTRL = 0x1000E000u;
 @@ -2195,6 +2220,8 @@ bool PS2Memory::tryProcessNativeGifImageUploadChain(GS &gs, uint32_t tadr, uint3
- 
+
  bool PS2Memory::tryProcessNativeGifPackedChain(GS &gs, uint32_t tadr, uint32_t chcr)
  {
 +    return false; // CoreGS must receive the original DMA/GIF stream.
@@ -139,21 +163,44 @@ index 37b6a4d..b06fea7 100644
      static constexpr uint32_t D_STAT = 0x1000E010u;
      static constexpr uint32_t D_CTRL = 0x1000E000u;
 diff --git a/ps2xRuntime/src/lib/ps2_runtime.cpp b/ps2xRuntime/src/lib/ps2_runtime.cpp
-index 45cb9d2..958b8db 100644
+index 4656568..8f7d068 100644
 --- a/ps2xRuntime/src/lib/ps2_runtime.cpp
 +++ b/ps2xRuntime/src/lib/ps2_runtime.cpp
 @@ -1,3 +1,4 @@
 +#include "manhunt2_coregs.h"
  #include "ps2_runtime.h"
- #include "ps2_log.h"
- #include "ps2_stubs.h"
-@@ -2422,7 +2423,27 @@ void PS2Runtime::run()
+ #if defined(__ANDROID__)
+ #include "runtime/ps2_android_runtime.h"
+@@ -2689,17 +2690,7 @@ void PS2Runtime::run()
+     Texture2D frameTex = LoadTextureFromImage(blank);
+     UnloadImage(blank);
+
+-#if defined(__ANDROID__)
+-    // raylib's NativeActivity backend already owns ANativeWindow and EGL.
+-    // Attach the GLES3 presenter to that active context instead of creating a
+-    // competing EGL surface/context for the same Android window.
+-    AndroidVideoOutput androidVideoOutput;
+-    const bool androidVideoReady = androidVideoOutput.initialize();
+-    if (!androidVideoReady)
+-    {
+-        RUNTIME_LOG("[video] GLES3 presenter unavailable; retaining raylib texture output.");
+-    }
+-#endif
++    uint64_t coregsTick = UINT64_MAX;
+
+     std::atomic<bool> gameThreadFinished{false};
+
+@@ -2767,11 +2758,29 @@ void PS2Runtime::run()
          });
          uint32_t presentWidth = FB_WIDTH;
          uint32_t presentHeight = DEFAULT_DISPLAY_HEIGHT;
+-#if defined(__ANDROID__)
+-        UploadFrame(frameTex, this, presentWidth, presentHeight, &androidVideoOutput);
+-#else
 -        UploadFrame(frameTex, this, presentWidth, presentHeight);
+-#endif
 +        mh_gs_window(GetWindowHandle());
-+        // SDK stubs can modify display registers directly, bypassing MMIO writes.
++        // SDK display stubs may bypass MMIO.
 +        const auto &display = m_memory.gs();
 +        mh_gs_write(0x12000000u, display.pmode, 8);
 +        mh_gs_write(0x12000010u, display.smode1, 8);
@@ -170,12 +217,41 @@ index 45cb9d2..958b8db 100644
 +        mh_gs_write(0x120000c0u, display.extdata, 8);
 +        mh_gs_write(0x120000d0u, display.extwrite, 8);
 +        mh_gs_write(0x120000e0u, display.bgcolor, 8);
-+        static uint64_t coregsTick = UINT64_MAX;
-+        const auto tick = eeScheduler().currentVSyncTick();
-+        if (tick != coregsTick) { mh_gs_frame(display.csr.load(), display.smode2); coregsTick = tick; }
- 
-         BeginDrawing();
-         ClearBackground(BLACK);
++        const auto gsTick = eeScheduler().currentVSyncTick();
++        if (gsTick != coregsTick) {
++            mh_gs_frame(display.csr.load(), display.smode2);
++            coregsTick = gsTick;
++        }
+         if ((tick % 120u) == 0u)
+         {
+             const uint64_t curDma = m_memory.dmaStartCount();
+@@ -2823,16 +2832,7 @@ void PS2Runtime::run()
+             (screenHeight - dstHeight) * 0.5f,
+             dstWidth,
+             dstHeight};
+-#if defined(__ANDROID__)
+-        if (!androidVideoOutput.draw(presentWidth, presentHeight,
+-                                    static_cast<uint32_t>(std::max(0.0f, screenWidth)),
+-                                    static_cast<uint32_t>(std::max(0.0f, screenHeight))))
+-        {
+-            DrawTexturePro(frameTex, srcRect, dstRect, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+-        }
+-#else
+-        DrawTexturePro(frameTex, srcRect, dstRect, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+-#endif
++        // CoreGS owns the window; the host GL context is an offscreen pbuffer.
+ #if defined(__ANDROID__)
+         ps2AndroidDrawTouchControls();
+ #endif
+@@ -2862,7 +2862,7 @@ void PS2Runtime::run()
+         m_debugUiInitialized = false;
+     }
+ #if defined(__ANDROID__)
+-    androidVideoOutput.shutdown();
++    mh_gs_window(nullptr);
+ #endif
+     UnloadTexture(frameTex);
+     CloseWindow();
 diff --git a/ps2xRuntime/src/lib/vu/ps2_vu1_core.cpp b/ps2xRuntime/src/lib/vu/ps2_vu1_core.cpp
 index f19e281..1dd033c 100644
 --- a/ps2xRuntime/src/lib/vu/ps2_vu1_core.cpp
@@ -186,7 +262,7 @@ index f19e281..1dd033c 100644
  #include "runtime/gs/ps2_gif_arbiter.h"
  #include "runtime/gs/gs_frontend.h"
 @@ -921,8 +922,10 @@ void VU1Interpreter::finishXgkick()
- 
+
      if (m_activeMemory)
          m_activeMemory->submitGifPacket(GifPathId::Path1, m_xgkick.packet.data(), m_xgkick.totalBytes);
 -    else if (m_activeGs)
@@ -196,4 +272,4 @@ index f19e281..1dd033c 100644
 +    }
      m_xgkick.active = false;
  }
- 
+
