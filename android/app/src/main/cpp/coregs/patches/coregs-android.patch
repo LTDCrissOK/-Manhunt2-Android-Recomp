@@ -1,0 +1,270 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 118d496..59ee6ac 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -13,6 +13,9 @@ if(WIN32)
+     set(COREGS_VULKAN_SDK "$ENV{VULKAN_SDK}" CACHE PATH "Vulkan SDK root with Include/ and Lib/vulkan-1.lib")
+     find_path(COREGS_VULKAN_INCLUDE_DIR vulkan/vulkan.h HINTS "${COREGS_VULKAN_SDK}/Include" REQUIRED)
+     find_library(COREGS_VULKAN_LIBRARY NAMES vulkan-1 HINTS "${COREGS_VULKAN_SDK}/Lib" REQUIRED)
++elseif(ANDROID)
++    set(COREGS_VULKAN_INCLUDE_DIR "${vulkan_headers_SOURCE_DIR}/include")
++    set(COREGS_VULKAN_LIBRARY vulkan android dl)
+ else()
+     find_package(Vulkan REQUIRED)
+     set(COREGS_VULKAN_INCLUDE_DIR "${Vulkan_INCLUDE_DIRS}")
+@@ -112,7 +115,7 @@ endif()
+ 
+ # ---- coregs: the front end a host talks to ----------------------------------------------------
+ set(COREGS_RENDERER_SOURCES hw_present_mode.cpp)
+-if(WIN32)
++if(WIN32 OR ANDROID)
+     list(APPEND COREGS_RENDERER_SOURCES hw_gs_backend.cpp)
+ endif()
+ 
+diff --git a/src/core2/core2_gpu.cpp b/src/core2/core2_gpu.cpp
+index 7c6e9df..3355ca8 100644
+--- a/src/core2/core2_gpu.cpp
++++ b/src/core2/core2_gpu.cpp
+@@ -4549,7 +4549,7 @@ bool Gpu::Compose(const std::uint32_t words[28], ImageId sourceA, ImageId source
+ }
+ 
+ std::uint64_t Gpu::DisplayImage() const {
+-  return reinterpret_cast<std::uint64_t>(impl_->display.image);
++  return (std::uint64_t)(impl_->display.image);
+ }
+ 
+ bool Gpu::Deinterlace(const gpu::GpuDrawer::DeinterlaceStep &step, std::string &error) {
+@@ -4659,7 +4659,7 @@ bool Gpu::Fxaa(std::uint32_t width, std::uint32_t height, std::string &error) {
+   return true;
+ }
+ 
+-std::uint64_t Gpu::FxaaImage() const { return reinterpret_cast<std::uint64_t>(impl_->fxaa.image); }
++std::uint64_t Gpu::FxaaImage() const { return (std::uint64_t)(impl_->fxaa.image); }
+ 
+ bool Gpu::PresentScale(bool fromFxaa, std::uint32_t width, std::uint32_t height, std::uint32_t outWidth,
+                        std::uint32_t outHeight, float sharpness, std::string &error) {
+@@ -4738,7 +4738,7 @@ bool Gpu::PresentScale(bool fromFxaa, std::uint32_t width, std::uint32_t height,
+   return true;
+ }
+ 
+-std::uint64_t Gpu::PresentImage() const { return reinterpret_cast<std::uint64_t>(impl_->presentOut.image); }
++std::uint64_t Gpu::PresentImage() const { return (std::uint64_t)(impl_->presentOut.image); }
+ 
+ bool Gpu::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &pixels,
+                       std::string &error, bool presentScaled, bool fxaa) {
+diff --git a/src/hw_gs_backend.cpp b/src/hw_gs_backend.cpp
+index ba5eb32..de15cdc 100644
+--- a/src/hw_gs_backend.cpp
++++ b/src/hw_gs_backend.cpp
+@@ -270,7 +270,7 @@ struct Renderer::Impl {
+ 
+   // On the frametime thread: when the presentation `id` reached the display, in the log's milliseconds; 0 when it did not
+   // within half a second.
+-  double wait_until_shown(VkSwapchainKHR on, std::uint64_t id, HANDLE timer) {
++  double wait_until_shown(VkSwapchainKHR on, std::uint64_t id, void *timer) {
+     VkPresentWait2InfoKHR info{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
+     info.presentId = id;
+     info.timeout = 0;
+@@ -283,6 +283,7 @@ struct Renderer::Impl {
+       }
+       if (result == VK_SUCCESS) return frametime_now_ms();
+       if (result != VK_TIMEOUT || std::chrono::steady_clock::now() >= deadline) return 0.0;
++#if defined(_WIN32)
+       if (timer != nullptr) {
+         LARGE_INTEGER due{};
+         due.QuadPart = -kShownPollUs * 10;  // relative, in 100 ns units
+@@ -290,12 +291,19 @@ struct Renderer::Impl {
+       } else {
+         std::this_thread::yield();
+       }
++#else
++      std::this_thread::sleep_for(std::chrono::microseconds(kShownPollUs));
++#endif
+     }
+   }
+ 
+   void frametime_worker() {
+     // A high-resolution timer for the half-millisecond polls (a plain Sleep rounds to the system tick).
++#if defined(_WIN32)
+     HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
++#else
++    void *timer = nullptr;
++#endif
+     std::uint64_t finished_id = 0;
+     for (;;) {
+       FrametimeEntry entry{};
+@@ -306,7 +314,9 @@ struct Renderer::Impl {
+         frametime_changed.notify_all();
+         frametime_changed.wait(lock, [&] { return frametime_stop || !frametime_queue.empty(); });
+         if (frametime_queue.empty()) {
++#if defined(_WIN32)
+           if (timer != nullptr) CloseHandle(timer);
++#endif
+           return;
+         }
+         entry = frametime_queue.front();
+@@ -398,7 +408,7 @@ struct Renderer::Impl {
+   VkExtent2D extent{};
+   std::uint32_t image_count = 0;
+   VkSemaphore render_finished[max_swapchain_images] = {};
+-  HWND window = nullptr;
++  void *window = nullptr;
+   std::uint32_t client_width = 0, client_height = 0;  // the host's client area, as attach_window got it
+   std::atomic<bool> resize_pending{false};  // also set by the presentation thread of TASK-082
+   // TASK-145: why the swapchain is rebuilt (logged with each rebuild), and a VK_SUBOPTIMAL_KHR seen since the last frame
+@@ -617,7 +627,12 @@ struct Renderer::Impl {
+   // Feature report and device choice (chapter 12.6). Returns false with `error` set when no device qualifies.
+   bool create_instance(std::string &error) {
+     if (!vulkan_loader::load_loader(error)) return false;
+-    const char *extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
++    const char *extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME,
++#if defined(__ANDROID__)
++                                VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
++#else
++                                VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
++#endif
+                                 VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME};
+     // The frametime log's shown times need the third one (the log goes on without them).
+     const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
+@@ -1978,15 +1993,22 @@ bool Renderer::attach_window(void *hwnd, std::uint32_t width, std::uint32_t heig
+     error = "attach_window before init";
+     return false;
+   }
+-  s.window = static_cast<HWND>(hwnd);
++  detach_window();
++  s.window = hwnd;
+   s.client_width = width;
+   s.client_height = height;
++#if defined(__ANDROID__)
++  VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
++  info.window = static_cast<ANativeWindow *>(s.window);
++  const VkResult result = vkCreateAndroidSurfaceKHR(s.instance, &info, nullptr, &s.surface);
++#else
+   VkWin32SurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
+   info.hinstance = GetModuleHandleW(nullptr);
+-  info.hwnd = s.window;
++  info.hwnd = static_cast<HWND>(s.window);
+   const VkResult result = vkCreateWin32SurfaceKHR(s.instance, &info, nullptr, &s.surface);
++#endif
+   if (result != VK_SUCCESS) {
+-    error = std::string("vkCreateWin32SurfaceKHR failed: ") + vk_result_text(result);
++    error = std::string("Vulkan surface creation failed: ") + vk_result_text(result);
+     return false;
+   }
+   VkBool32 supported = VK_FALSE;
+@@ -2080,7 +2102,7 @@ bool Renderer::end_frame(PresentPhase phase) {
+   if (s.renderer->ComposeFrameGpu(gpuFrame)) {
+     // IN-364: composed on the GPU; the present copies the display image (no CPU pixels, no upload).
+     s.frameOnGpu = true;
+-    s.gpuImage = reinterpret_cast<VkImage>(gpuFrame.image);
++    s.gpuImage = (VkImage)(gpuFrame.image);
+     s.frame.valid = true;
+     s.frame.width = gpuFrame.width;
+     s.frame.height = gpuFrame.height;
+diff --git a/src/hw_gs_vulkan_loader.cpp b/src/hw_gs_vulkan_loader.cpp
+index c2eb068..4b344e1 100644
+--- a/src/hw_gs_vulkan_loader.cpp
++++ b/src/hw_gs_vulkan_loader.cpp
+@@ -38,8 +38,12 @@ bool load_loader(std::string &error) {
+   const char *const name = "vulkan-1.dll";
+   void *symbol = library ? reinterpret_cast<void *>(GetProcAddress(library, "vkGetInstanceProcAddr")) : nullptr;
+ #else
+-  void *library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
++#if defined(__ANDROID__)
++  const char *const name = "libvulkan.so";
++#else
+   const char *const name = "libvulkan.so.1";
++#endif
++  void *library = dlopen(name, RTLD_NOW | RTLD_LOCAL);
+   void *symbol = library ? dlsym(library, "vkGetInstanceProcAddr") : nullptr;
+ #endif
+   if (!library) {
+@@ -93,6 +97,9 @@ void resolve_headless(VkInstance instance, std::vector<std::string> &missing) {
+ 
+ // Surface and presentation entry points: only the windowed path needs them.
+ void resolve_surface(VkInstance instance, std::vector<std::string> &missing) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++  resolve(coregs_hw_vkCreateAndroidSurfaceKHR, instance, "vkCreateAndroidSurfaceKHR", missing);
++#endif
+   resolve(coregs_hw_vkAcquireNextImageKHR, instance, "vkAcquireNextImageKHR", missing);
+   resolve(coregs_hw_vkCreateSwapchainKHR, instance, "vkCreateSwapchainKHR", missing);
+ #if defined(VK_USE_PLATFORM_WIN32_KHR)
+diff --git a/src/hw_gs_vulkan_loader.hpp b/src/hw_gs_vulkan_loader.hpp
+index 44d470e..5202724 100644
+--- a/src/hw_gs_vulkan_loader.hpp
++++ b/src/hw_gs_vulkan_loader.hpp
+@@ -21,6 +21,9 @@
+ #include <windows.h>
+ #define VK_USE_PLATFORM_WIN32_KHR
+ #endif
++#if defined(__ANDROID__)
++#define VK_USE_PLATFORM_ANDROID_KHR
++#endif
+ #define VK_NO_PROTOTYPES
+ #include <vulkan/vulkan.h>
+ 
+@@ -41,6 +44,7 @@
+ #define vkCreateInstance coregs_hw_vkCreateInstance
+ #define vkCreateSemaphore coregs_hw_vkCreateSemaphore
+ #define vkCreateSwapchainKHR coregs_hw_vkCreateSwapchainKHR
++#define vkCreateAndroidSurfaceKHR coregs_hw_vkCreateAndroidSurfaceKHR
+ #define vkCreateWin32SurfaceKHR coregs_hw_vkCreateWin32SurfaceKHR
+ #define vkDestroyCommandPool coregs_hw_vkDestroyCommandPool
+ #define vkDestroyDevice coregs_hw_vkDestroyDevice
+@@ -69,6 +73,9 @@
+ #define vkResetFences coregs_hw_vkResetFences
+ #define vkWaitForFences coregs_hw_vkWaitForFences
+ 
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++inline PFN_vkCreateAndroidSurfaceKHR coregs_hw_vkCreateAndroidSurfaceKHR = nullptr;
++#endif
+ inline PFN_vkAcquireNextImageKHR coregs_hw_vkAcquireNextImageKHR = nullptr;
+ inline PFN_vkAllocateCommandBuffers coregs_hw_vkAllocateCommandBuffers = nullptr;
+ inline PFN_vkBeginCommandBuffer coregs_hw_vkBeginCommandBuffer = nullptr;
+diff --git a/src/writeback/hw_gs_writeback_gpu.cpp b/src/writeback/hw_gs_writeback_gpu.cpp
+index fadbd0c..a00b1cd 100644
+--- a/src/writeback/hw_gs_writeback_gpu.cpp
++++ b/src/writeback/hw_gs_writeback_gpu.cpp
+@@ -3796,7 +3796,7 @@ bool GpuDrawer::ApplyFxaa(std::uint32_t width, std::uint32_t height, std::string
+   return true;
+ }
+ 
+-std::uint64_t GpuDrawer::FxaaImage() const { return reinterpret_cast<std::uint64_t>(impl_->fxaaImage.image); }
++std::uint64_t GpuDrawer::FxaaImage() const { return (std::uint64_t)(impl_->fxaaImage.image); }
+ 
+ void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
+   impl_->scale = std::clamp<std::uint32_t>(scale, 1u, kGpuMaxScale);
+@@ -3830,7 +3830,7 @@ void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
+ 
+ std::uint32_t GpuDrawer::Scale() const { return impl_->scale; }
+ 
+-std::uint64_t GpuDrawer::DisplayImage() const { return reinterpret_cast<std::uint64_t>(impl_->display.image); }
++std::uint64_t GpuDrawer::DisplayImage() const { return (std::uint64_t)(impl_->display.image); }
+ 
+ bool GpuDrawer::ReadImageDebug(std::uint32_t which, std::uint32_t slot, std::uint32_t width, std::uint32_t height,
+                                std::vector<std::uint32_t> &words, std::string &error) {
+@@ -3852,7 +3852,7 @@ bool GpuDrawer::ReadImageDebug(std::uint32_t which, std::uint32_t slot, std::uin
+                          : which == 6 ? s.scaledDepths[slot].image
+                          : which == 7 ? s.depths[slot].image
+                                       : s.deinterlaceHistory[s.lastDeinterlaceCurrent].image;
+-  return read_image(reinterpret_cast<std::uint64_t>(source), width, height, words, error);
++  return read_image((std::uint64_t)(source), width, height, words, error);
+ }
+ 
+ bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
+@@ -3867,13 +3867,13 @@ bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vect
+     error = "display read outside the display image";
+     return false;
+   }
+-  return read_image(reinterpret_cast<std::uint64_t>(source), width, height, words, error);
++  return read_image((std::uint64_t)(source), width, height, words, error);
+ }
+ 
+ bool GpuDrawer::read_image(std::uint64_t image, std::uint32_t width, std::uint32_t height,
+                           std::vector<std::uint32_t> &words, std::string &error) {
+   Impl &s = *impl_;
+-  const VkImage source = reinterpret_cast<VkImage>(image);
++  const VkImage source = (VkImage)(image);
+   words.resize(static_cast<std::size_t>(width) * height);
+   // IN-372: a scaled frame can exceed the readback buffer; it is read in bands of whole rows.
+   const std::uint32_t bandRows =

@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.31.6)
 project(Manhunt2AndroidNative LANGUAGES C CXX)
 
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+include(coregs/Dependencies.cmake)
 
 # PS2Recomp's Android configuration builds the PS2 runtime and NativeActivity runner.
 # Pin the upstream revision so a future upstream change cannot silently break this build.
@@ -25,9 +26,12 @@ set(PS2X_ENABLE_RUNNER_PCH ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     ps2recomp
-    GIT_REPOSITORY https://github.com/ran-j/PS2Recomp.git
-    GIT_TAG e5636981a1c9de368f6b71e819c3dc188dfedbf4
+    GIT_REPOSITORY https://github.com/LTDCrissOK/PS2Recomp.git
+    GIT_TAG 483fc899b952b14f87713694f92f4bdf599f4572
     GIT_PROGRESS TRUE
+    PATCH_COMMAND "${CMAKE_COMMAND}" "-DSOURCE=<SOURCE_DIR>"
+        "-DPATCH=${MANHUNT2_COREGS_DIR}/patches/ps2recomp-coregs.patch"
+        -P "${MANHUNT2_COREGS_DIR}/ApplyPatch.cmake"
 )
 FetchContent_MakeAvailable(ps2recomp)
 
@@ -92,3 +96,10 @@ set_source_files_properties("${MANHUNT2_FUNCTION_TABLE}" PROPERTIES
     SKIP_UNITY_BUILD_INCLUSION ON
     COMPILE_OPTIONS "-O0"
 )
+
+# CoreGS bridge is shared by the EE/GS and Android lifecycle callbacks.
+target_sources(ps2_runtime PRIVATE "${MANHUNT2_COREGS_DIR}/manhunt2_coregs.cpp")
+target_include_directories(ps2_runtime PRIVATE "${MANHUNT2_COREGS_DIR}")
+target_include_directories(raylib PRIVATE "${MANHUNT2_COREGS_DIR}")
+target_compile_definitions(ps2_runtime PRIVATE MANHUNT2_GS_SCALE=${MANHUNT2_GS_SCALE})
+target_link_libraries(ps2_runtime PUBLIC coregs)
